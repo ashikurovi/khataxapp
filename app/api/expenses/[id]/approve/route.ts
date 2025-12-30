@@ -5,11 +5,12 @@ import MemberModel from "@/app/api/models/Member";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
-    const expenseId = params.id;
+    const { id } = await params;
+    const expenseId = id;
 
     // Find the expense
     const expense = await DailyExpenseModel.findById(expenseId);
