@@ -6,11 +6,12 @@ import { format } from "date-fns";
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
-    const bazarId = params.id;
+    const { id } = await params;
+    const bazarId = id;
 
     const bazar = await BazarListModel.findById(bazarId)
       .populate("assignedTo")
