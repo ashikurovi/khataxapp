@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { BazarScheduler } from "@/lib/bazar-scheduler";
 import connectDB from "@/lib/db";
 import UserModel from "@/app/api/models/User";
-import BazarListModel from "@/app/api/models/BazarList";
+import BazarListModel, { IBazarList } from "@/app/api/models/BazarList";
 import SemesterBreakModel from "@/app/api/models/SemesterBreak";
 import { UserRole } from "@/types";
 
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "Bazar schedule generated successfully",
-      data: savedSchedule.map((item) => ({
+      data: savedSchedule.map((item: IBazarList) => ({
         id: item._id.toString(),
         bazarNo: item.bazarNo,
         date: item.date,
