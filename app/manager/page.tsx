@@ -125,7 +125,7 @@ export default function ManagerDashboardPage() {
 
   const deleteAllMutation = useMutation({
     mutationFn: async (table: string) => {
-      const response = await apiClient.post("/delete-all", { table });
+      const response = await apiClient.post<{ totalDeleted?: number; deletedCount?: number; table?: string; collections?: Record<string, number> }>("/delete-all", { table });
       if (!response.success) {
         throw new Error(response.error || "Failed to delete data");
       }
@@ -201,7 +201,7 @@ export default function ManagerDashboardPage() {
                       border: "1px solid #e5e7eb",
                       borderRadius: "8px"
                     }}
-                    formatter={(value: number) => [`TK ${value.toFixed(2)}`, "Cost"]}
+                    formatter={(value: number | undefined) => [`TK ${value !== undefined ? value.toFixed(2) : '0.00'}`, "Cost"]}
                   />
                   <Legend />
                   <Line 

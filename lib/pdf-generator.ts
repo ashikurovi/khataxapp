@@ -9,12 +9,12 @@ export class PDFGenerator {
     const { member, month, year, transactions, totalDeposit, totalExpense, balance, border, managerReceivable } = invoiceData;
 
     // Modern color scheme
-    const primaryColor = [59, 130, 246]; // Blue
-    const secondaryColor = [139, 92, 246]; // Purple
-    const successColor = [34, 197, 94]; // Green
-    const dangerColor = [239, 68, 68]; // Red
-    const grayColor = [107, 114, 128]; // Gray
-    const lightGray = [243, 244, 246]; // Light gray
+    const primaryColor: [number, number, number] = [59, 130, 246]; // Blue
+    const secondaryColor: [number, number, number] = [139, 92, 246]; // Purple
+    const successColor: [number, number, number] = [34, 197, 94]; // Green
+    const dangerColor: [number, number, number] = [239, 68, 68]; // Red
+    const grayColor: [number, number, number] = [107, 114, 128]; // Gray
+    const lightGray: [number, number, number] = [243, 244, 246]; // Light gray
 
     // Modern Header with colored background
     doc.setFillColor(...primaryColor);
@@ -222,10 +222,10 @@ export class PDFGenerator {
     const doc = new jsPDF();
     
     // Modern color scheme
-    const primaryColor = [59, 130, 246]; // Blue
-    const successColor = [34, 197, 94]; // Green
-    const grayColor = [107, 114, 128]; // Gray
-    const lightGray = [243, 244, 246]; // Light gray
+    const primaryColor: [number, number, number] = [59, 130, 246]; // Blue
+    const successColor: [number, number, number] = [34, 197, 94]; // Green
+    const grayColor: [number, number, number] = [107, 114, 128]; // Gray
+    const lightGray: [number, number, number] = [243, 244, 246]; // Light gray
 
     // Modern Header
     doc.setFillColor(...primaryColor);
@@ -255,7 +255,7 @@ export class PDFGenerator {
       ]],
       body: expenses.map((e) => [
         format(new Date(e.date), "dd/MM/yyyy"),
-        e.addedByUser.name,
+        e.addedByUser?.name || "Unknown",
         e.bazarShop,
         { content: `TK ${e.totalTK.toFixed(2)}`, styles: { halign: "right" } },
         { content: `TK ${e.extra.toFixed(2)}`, styles: { halign: "right" } },
@@ -332,12 +332,12 @@ export class PDFGenerator {
     const doc = new jsPDF();
     
     // Modern color scheme
-    const primaryColor = [59, 130, 246]; // Blue
-    const secondaryColor = [139, 92, 246]; // Purple
-    const successColor = [34, 197, 94]; // Green
-    const warningColor = [251, 191, 36]; // Yellow
-    const grayColor = [107, 114, 128]; // Gray
-    const lightGray = [243, 244, 246]; // Light gray
+    const primaryColor: [number, number, number] = [59, 130, 246]; // Blue
+    const secondaryColor: [number, number, number] = [139, 92, 246]; // Purple
+    const successColor: [number, number, number] = [34, 197, 94]; // Green
+    const warningColor: [number, number, number] = [251, 191, 36]; // Yellow
+    const grayColor: [number, number, number] = [107, 114, 128]; // Gray
+    const lightGray: [number, number, number] = [243, 244, 246]; // Light gray
 
     // Modern Header
     doc.setFillColor(...secondaryColor);

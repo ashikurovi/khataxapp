@@ -1,5 +1,5 @@
 import { addDays, isAfter, isBefore } from "date-fns";
-import { BazarList, SemesterBreak, User } from "@/types";
+import { BazarList, BazarStatus, SemesterBreak, User } from "@/types";
 
 export class BazarScheduler {
   /**
@@ -38,14 +38,14 @@ export class BazarScheduler {
             bazarNo,
             date: new Date(currentDate),
             assignedTo: firstMember.id,
-            status: "Pending" as const,
+            status: BazarStatus.PENDING,
           });
           
           schedule.push({
             bazarNo,
             date: new Date(currentDate),
             assignedTo: secondMember.id,
-            status: "Pending" as const,
+            status: BazarStatus.PENDING,
           });
           
           bazarNo++;
@@ -57,7 +57,7 @@ export class BazarScheduler {
             bazarNo,
             date: new Date(currentDate),
             assignedTo: assignedMember.id,
-            status: "Pending" as const,
+            status: BazarStatus.PENDING,
           });
           bazarNo++;
           memberIndex++;

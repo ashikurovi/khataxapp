@@ -89,16 +89,16 @@ export default function RegisterPage() {
         return;
       }
 
-      const response = await apiClient.post("/auth/register", {
+      const response = await apiClient.post<{ userId: string; token: string }>("/auth/register", {
         ...data,
         email: user.email,
         picture: user.photoURL || "",
         googleId: user.uid,
       });
 
-      if (response.success) {
+      if (response.success && response.data) {
         // Store user data including userId and token in localStorage
-        if (typeof window !== "undefined" && response.data?.userId) {
+        if (typeof window !== "undefined" && response.data.userId) {
           localStorage.setItem(
             "user",
             JSON.stringify({
@@ -107,7 +107,7 @@ export default function RegisterPage() {
               userId: response.data.userId,
             })
           );
-          if (response.data?.token) {
+          if (response.data.token) {
             localStorage.setItem("authToken", response.data.token);
           }
           localStorage.setItem("authType", "google");

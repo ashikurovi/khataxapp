@@ -1,4 +1,4 @@
-import { SignJWT, jwtVerify } from "jose";
+import { SignJWT, jwtVerify, JWTPayload } from "jose";
 
 const SECRET_KEY = process.env.JWT_SECRET || "your-secret-key-change-in-production";
 const ALGORITHM = "HS256";
@@ -13,6 +13,7 @@ export interface TokenPayload {
   email: string;
   role: string;
   name?: string;
+  [key: string]: unknown;
 }
 
 /**

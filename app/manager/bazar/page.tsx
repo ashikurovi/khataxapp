@@ -49,7 +49,7 @@ export default function BazarPage() {
 
   const { mutate: sendBulkEmail, isPending: isSendingBulkEmail } = useMutation({
     mutationFn: async () => {
-      return apiClient.post("/bazar/send-bulk-email", {});
+      return apiClient.post<{ success: boolean; message?: string; error?: string; data?: any }>("/bazar/send-bulk-email", {});
     },
     onSuccess: (response) => {
       const data = response.data;
