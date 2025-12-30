@@ -44,8 +44,9 @@ export default function RegisterPage() {
 
     try {
       // Check if Contacts API is available (Chrome/Edge)
-      if ("contacts" in navigator && "select" in navigator.contacts) {
-        const contacts = await (navigator.contacts as any).select(["tel"], { multiple: false });
+      const nav = navigator as any;
+      if ("contacts" in navigator && nav.contacts && "select" in nav.contacts) {
+        const contacts = await nav.contacts.select(["tel"], { multiple: false });
         if (contacts && contacts.length > 0 && contacts[0].tel && contacts[0].tel.length > 0) {
           const phoneNumber = contacts[0].tel[0].value;
           setValue("phone", phoneNumber);
