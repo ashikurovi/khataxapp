@@ -53,7 +53,20 @@ export async function GET(request: NextRequest) {
     const totalManagerReceivable = heshabWithUser.reduce((sum, h) => sum + h.due, 0);
 
     // Prepare data for Excel
-    const excelData = heshabWithUser.map((heshab) => ({
+    const excelData: Array<{
+      "Member Name": string;
+      "Department": string;
+      "Institute": string;
+      "Phone": string;
+      "Email": string;
+      "Deposit": number;
+      "Per Extra": number;
+      "Total Expense": number;
+      "Border": number;
+      "Manager Receivable": number;
+      "Month": number | string;
+      "Year": number | string;
+    }> = heshabWithUser.map((heshab) => ({
       "Member Name": heshab.user.name,
       "Department": heshab.user.dept,
       "Institute": heshab.user.institute,

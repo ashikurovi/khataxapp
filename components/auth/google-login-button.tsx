@@ -47,7 +47,7 @@ export function GoogleLoginButton({
         // Redirect to registration
         router.push("/auth/register");
       } else {
-        // Store user data including userId in localStorage
+        // Store user data including userId and token in localStorage
         if (typeof window !== "undefined" && data.userId) {
           localStorage.setItem(
             "user",
@@ -57,6 +57,9 @@ export function GoogleLoginButton({
               userId: data.userId,
             })
           );
+          if (data.token) {
+            localStorage.setItem("authToken", data.token);
+          }
           localStorage.setItem("authType", "google");
         }
         

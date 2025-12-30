@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import UserModel from "@/app/api/models/User";
+import { generateToken } from "@/lib/jwt";
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,11 +12,30 @@ export async function POST(request: NextRequest) {
       $or: [{ email }, { googleId }],
     });
 
+    if (!user) {
+      return NextResponse.json({
+        success: true,
+        exists: false,
+        role: null,
+        userId: null,
+        token: null,
+      });
+    }
+
+    // Generate JWT token for existing user
+    const token = await generateToken({
+      userId: user._id.toString(),
+      email: user.email,
+      role: user.role,
+      name: user.name,
+    });
+
     return NextResponse.json({
       success: true,
-      exists: !!user,
-      role: user?.role || null,
-      userId: user?._id.toString() || null,
+      exists: true,
+      role: user.role,
+      userId: user._id.toString(),
+      token,
     });
   } catch (error: any) {
     console.error("Check user error:", error);

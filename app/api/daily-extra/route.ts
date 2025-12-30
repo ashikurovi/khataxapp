@@ -101,9 +101,37 @@ export async function POST(request: NextRequest) {
     const memberCount = await MemberModel.countDocuments();
     const perExtra = memberCount > 0 ? totalExtra / memberCount : 0;
 
+    // Calculate the new daily extra amount per member (just this new entry)
+    const newExtraPerMember = memberCount > 0 ? data.amount / memberCount : 0;
+
+    // Update all members' totalExpense and recalculate balanceDue
+    // This adds the daily extra to total expense, which subtracts from total deposit
+    const members = await MemberModel.find().lean();
+    const memberUpdatePromises = members.map(async (member: any) => {
+      const newTotalExpense = member.totalExpense + newExtraPerMember;
+      const newBalanceDue = member.totalDeposit - newTotalExpense;
+      
+      // Calculate border and managerReceivable based on balance
+      let border = 0;
+      let managerReceivable = 0;
+      
+      if (newBalanceDue > 0) {
+        border = newBalanceDue;
+      } else if (newBalanceDue < 0) {
+        managerReceivable = Math.abs(newBalanceDue);
+      }
+
+      await MemberModel.findByIdAndUpdate(member._id, {
+        totalExpense: newTotalExpense,
+        balanceDue: newBalanceDue,
+        border,
+        managerReceivable,
+      });
+    });
+
     // Update all heshab records for this month - recalculate currentBalance and due
     const heshabRecords = await HeshabModel.find({ month, year }).lean();
-    const updatePromises = heshabRecords.map(async (heshab: any) => {
+    const heshabUpdatePromises = heshabRecords.map(async (heshab: any) => {
       const currentBalance = heshab.deposit + perExtra - heshab.totalExpense;
       const due = currentBalance < 0 ? Math.abs(currentBalance) : 0;
       
@@ -114,7 +142,8 @@ export async function POST(request: NextRequest) {
       });
     });
     
-    await Promise.all(updatePromises);
+    // Execute all updates in parallel
+    await Promise.all([...memberUpdatePromises, ...heshabUpdatePromises]);
 
     return NextResponse.json({
       success: true,

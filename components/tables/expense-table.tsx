@@ -18,23 +18,48 @@ interface ExpenseTableProps {
   expenses: DailyExpenseWithUser[];
   onView?: (expense: DailyExpenseWithUser) => void;
   showActions?: boolean;
+  selectedIds?: string[];
+  onSelect?: (id: string, checked: boolean) => void;
+  onSelectAll?: (checked: boolean) => void;
+  showCheckboxes?: boolean;
 }
 
 export function ExpenseTable({
   expenses,
   onView,
   showActions = false,
+  selectedIds = [],
+  onSelect,
+  onSelectAll,
+  showCheckboxes = false,
 }: ExpenseTableProps) {
+  const allSelected = expenses.length > 0 && expenses.every(e => selectedIds.includes(e.id));
+  const someSelected = expenses.some(e => selectedIds.includes(e.id));
+
   return (
     <div className="rounded-md border">
       <Table>
         <TableHeader>
           <TableRow>
+            {showCheckboxes && (
+              <TableHead className="w-12">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={(input) => {
+                    if (input) input.indeterminate = someSelected && !allSelected;
+                  }}
+                  onChange={(e) => onSelectAll?.(e.target.checked)}
+                  className="cursor-pointer"
+                />
+              </TableHead>
+            )}
             <TableHead>Date</TableHead>
             <TableHead>Added By</TableHead>
             <TableHead>Bazar/Shop</TableHead>
             <TableHead>Total TK</TableHead>
             <TableHead>Extra</TableHead>
+            <TableHead>Status</TableHead>
             <TableHead>Notes</TableHead>
             {showActions && <TableHead>Actions</TableHead>}
           </TableRow>
@@ -42,13 +67,23 @@ export function ExpenseTable({
         <TableBody>
           {expenses.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={showActions ? 7 : 6} className="text-center">
+              <TableCell colSpan={showCheckboxes ? (showActions ? 9 : 8) : (showActions ? 8 : 7)} className="text-center">
                 No expenses found
               </TableCell>
             </TableRow>
           ) : (
             expenses.map((expense) => (
               <TableRow key={expense.id}>
+                {showCheckboxes && (
+                  <TableCell>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(expense.id)}
+                      onChange={(e) => onSelect?.(expense.id, e.target.checked)}
+                      className="cursor-pointer"
+                    />
+                  </TableCell>
+                )}
                 <TableCell>
                   {format(new Date(expense.date), "dd/MM/yyyy")}
                 </TableCell>
@@ -59,6 +94,11 @@ export function ExpenseTable({
                 <TableCell>TK {expense.totalTK.toFixed(2)}</TableCell>
                 <TableCell>
                   <Badge variant="secondary">TK {expense.extra.toFixed(2)}</Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={expense.approved ? "default" : "destructive"}>
+                    {expense.approved ? "Approved" : "Pending"}
+                  </Badge>
                 </TableCell>
                 <TableCell className="max-w-xs truncate">
                   {expense.notes || "-"}

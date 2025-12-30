@@ -20,31 +20,46 @@ export default function ManagerLoginPage() {
     setError("");
     setLoading(true);
 
-    // Simulate a small delay for better UX
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      // Call API login endpoint to get JWT token
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
 
-    // Local credential validation
-    const validEmail = "manager@gmail.com";
-    const validPassword = "manager123";
+      const data = await response.json();
 
-    if (email === validEmail && password === validPassword) {
-      // Store user data in localStorage
+      if (!response.ok || !data.success) {
+        setError(data.error || "Invalid email or password");
+        setLoading(false);
+        return;
+      }
+
+      // Store user data and token in localStorage
+      if (data.data.token) {
+        localStorage.setItem("authToken", data.data.token);
+      }
       localStorage.setItem(
         "user",
         JSON.stringify({
-          email: validEmail,
-          role: "Manager",
+          userId: data.data.userId,
+          email: data.data.email,
+          name: data.data.name,
+          role: data.data.role,
         })
       );
       localStorage.setItem("authType", "manager");
 
       // Redirect to manager panel
       router.push("/manager");
-    } else {
-      setError("Invalid email or password");
+    } catch (err: any) {
+      setError(err.message || "Login failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (

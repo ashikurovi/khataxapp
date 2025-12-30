@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import UserModel from "@/app/api/models/User";
 import { UserRole } from "@/types";
+import { generateToken } from "@/lib/jwt";
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,7 +43,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Return user data without token
+    // Generate JWT token for manager
+    const token = await generateToken({
+      userId: user._id.toString(),
+      email: user.email,
+      role: user.role,
+      name: user.name,
+    });
+
+    // Return user data with token
     return NextResponse.json({
       success: true,
       data: {
@@ -50,6 +59,7 @@ export async function POST(request: NextRequest) {
         email: user.email,
         name: user.name,
         role: user.role,
+        token,
       },
     });
   } catch (error: any) {

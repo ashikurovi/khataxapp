@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { auth } from "@/lib/firebase";
 import { apiClient } from "@/lib/api-client";
-import { Loader2 } from "lucide-react";
+import { Loader2, Phone } from "lucide-react";
 import { toast } from "sonner";
 
 const registerSchema = z.object({
@@ -30,9 +30,53 @@ export default function RegisterPage() {
     register,
     handleSubmit,
     formState: { errors },
+    setValue,
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
   });
+
+  const handleAddPhoneFromContacts = async () => {
+    // Show toast notification
+    toast.info("Add Phone Number", {
+      description: "Click the button to add phone from contacts",
+      duration: 2000,
+    });
+
+    try {
+      // Check if Contacts API is available (Chrome/Edge)
+      if ("contacts" in navigator && "select" in navigator.contacts) {
+        const contacts = await (navigator.contacts as any).select(["tel"], { multiple: false });
+        if (contacts && contacts.length > 0 && contacts[0].tel && contacts[0].tel.length > 0) {
+          const phoneNumber = contacts[0].tel[0].value;
+          setValue("phone", phoneNumber);
+          toast.success("Phone number added from contacts!", {
+            description: `Added: ${phoneNumber}`,
+            duration: 3000,
+          });
+          return;
+        }
+      }
+      
+      // For mobile devices - show helpful instructions
+      if (/Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+        toast.info("Mobile Device Detected", {
+          description: "Long press the phone input field to access your contacts, or enter manually",
+          duration: 4000,
+        });
+      } else {
+        toast.info("Enter Phone Number", {
+          description: "Please enter the phone number manually in the field",
+          duration: 3000,
+        });
+      }
+    } catch (error) {
+      // If Contacts API fails or is not supported
+      toast.info("Phone Number Input", {
+        description: "Please enter the phone number manually. Format: +8801234567890",
+        duration: 3000,
+      });
+    }
+  };
 
   const onSubmit = async (data: RegisterForm) => {
     try {
@@ -52,7 +96,7 @@ export default function RegisterPage() {
       });
 
       if (response.success) {
-        // Store user data including userId in localStorage
+        // Store user data including userId and token in localStorage
         if (typeof window !== "undefined" && response.data?.userId) {
           localStorage.setItem(
             "user",
@@ -62,6 +106,9 @@ export default function RegisterPage() {
               userId: response.data.userId,
             })
           );
+          if (response.data?.token) {
+            localStorage.setItem("authToken", response.data.token);
+          }
           localStorage.setItem("authType", "google");
         }
         
@@ -133,12 +180,26 @@ export default function RegisterPage() {
 
             <div className="space-y-2">
               <Label htmlFor="phone">Phone Number</Label>
-              <Input
-                id="phone"
-                {...register("phone")}
-                placeholder="+8801234567890"
-                disabled={loading}
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="phone"
+                  {...register("phone")}
+                  placeholder="+8801234567890"
+                  disabled={loading}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={handleAddPhoneFromContacts}
+                  disabled={loading}
+                  className="shrink-0"
+                  title="Add phone from contacts"
+                >
+                  <Phone className="h-4 w-4" />
+                </Button>
+              </div>
               {errors.phone && (
                 <p className="text-sm text-destructive">{errors.phone.message}</p>
               )}

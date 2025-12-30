@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
         totalTK: expense.totalTK,
         extra: expense.extra,
         notes: expense.notes,
+        approved: expense.approved || false,
         createdAt: expense.createdAt,
         updatedAt: expense.updatedAt,
         addedByUser: addedBy ? {
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
     const addedBy = request.headers.get("x-user-id") || data.addedBy || data.userId || null;
 
     // Build expense object - addedBy is optional
+    // Expenses are created as pending (approved: false) and only added to total expense when approved
     const expenseData: any = {
       date: new Date(data.date),
       bazarShop: data.bazarShop,
@@ -74,46 +76,13 @@ export async function POST(request: NextRequest) {
       extra: data.extra || 0,
       notes: data.notes || "",
       addedBy: addedBy || null, // Explicitly set to null if not provided
+      approved: false, // New expenses are pending approval
     };
 
     const expense = await DailyExpenseModel.create(expenseData);
 
-    // Calculate total expense amount (totalTK + extra)
-    const totalExpenseAmount = data.totalTK + (data.extra || 0);
-
-    // Get all members count
-    const memberCount = await MemberModel.countDocuments();
-    
-    if (memberCount > 0) {
-      // Calculate expense per member
-      const expensePerMember = totalExpenseAmount / memberCount;
-
-      // Update all members' totalExpense and recalculate balanceDue
-      const members = await MemberModel.find().lean();
-      const updatePromises = members.map(async (member: any) => {
-        const newTotalExpense = member.totalExpense + expensePerMember;
-        const newBalanceDue = member.totalDeposit - newTotalExpense;
-        
-        // Calculate border and managerReceivable based on balance
-        let border = 0;
-        let managerReceivable = 0;
-        
-        if (newBalanceDue > 0) {
-          border = newBalanceDue;
-        } else if (newBalanceDue < 0) {
-          managerReceivable = Math.abs(newBalanceDue);
-        }
-
-        await MemberModel.findByIdAndUpdate(member._id, {
-          totalExpense: newTotalExpense,
-          balanceDue: newBalanceDue,
-          border,
-          managerReceivable,
-        });
-      });
-
-      await Promise.all(updatePromises);
-    }
+    // Note: Expense is NOT added to total expense here
+    // It will be added when manager approves it via PATCH /expenses/[id]/approve
 
     return NextResponse.json({
       success: true,

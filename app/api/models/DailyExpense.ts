@@ -9,6 +9,7 @@ export interface IDailyExpense {
   totalTK: number;
   extra: number;
   notes: string;
+  approved: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,6 +48,10 @@ const DailyExpenseSchema = new Schema<IDailyExpense>(
     notes: {
       type: String,
       default: "",
+    },
+    approved: {
+      type: Boolean,
+      default: false,
     },
   },
   {

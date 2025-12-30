@@ -8,61 +8,211 @@ export class PDFGenerator {
     const doc = new jsPDF();
     const { member, month, year, transactions, totalDeposit, totalExpense, balance, border, managerReceivable } = invoiceData;
 
-    // Header
-    doc.setFontSize(20);
-    doc.text("KhataX - Mess Management", 105, 20, { align: "center" });
-    doc.setFontSize(16);
-    doc.text("Monthly Invoice", 105, 30, { align: "center" });
+    // Modern color scheme
+    const primaryColor = [59, 130, 246]; // Blue
+    const secondaryColor = [139, 92, 246]; // Purple
+    const successColor = [34, 197, 94]; // Green
+    const dangerColor = [239, 68, 68]; // Red
+    const grayColor = [107, 114, 128]; // Gray
+    const lightGray = [243, 244, 246]; // Light gray
 
-    // Member Info
+    // Modern Header with colored background
+    doc.setFillColor(...primaryColor);
+    doc.rect(0, 0, 210, 50, "F");
+    
+    // White text on colored background
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont("helvetica", "bold");
+    doc.text("KhataX", 20, 25);
+    
     doc.setFontSize(12);
-    doc.text(`Member: ${member.user.name}`, 20, 50);
-    doc.text(`Department: ${member.user.dept}`, 20, 57);
-    doc.text(`Institute: ${member.user.institute}`, 20, 64);
-    doc.text(`Email: ${member.user.email}`, 20, 71);
-    doc.text(`Period: ${format(new Date(year, month - 1), "MMMM yyyy")}`, 20, 78);
+    doc.setFont("helvetica", "normal");
+    doc.text("Mess Management System", 20, 35);
+    
+    // Invoice title on right side
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("MONTHLY INVOICE", 150, 25);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Invoice #${year}${month.toString().padStart(2, "0")}-${member.userId.slice(-6)}`, 150, 35);
 
-    // Summary Table
+    // Reset text color
+    doc.setTextColor(0, 0, 0);
+
+    // Invoice period badge
+    const periodText = format(new Date(year, month - 1), "MMMM yyyy").toUpperCase();
+    doc.setFillColor(...secondaryColor);
+    doc.roundedRect(20, 60, 60, 12, 3, 3, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text(periodText, 50, 68, { align: "center" });
+    doc.setTextColor(0, 0, 0);
+
+    // Member Information Section (Modern Card Style)
+    const memberStartY = 80;
+    doc.setFillColor(...lightGray);
+    doc.roundedRect(20, memberStartY, 170, 50, 3, 3, "F");
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...grayColor);
+    doc.text("BILL TO:", 25, memberStartY + 8);
+    
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text(member.user.name, 25, memberStartY + 18);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...grayColor);
+    doc.text(`${member.user.dept}`, 25, memberStartY + 26);
+    doc.text(`${member.user.institute}`, 25, memberStartY + 34);
+    doc.text(`${member.user.email}`, 25, memberStartY + 42);
+
+    // Summary Table with Modern Styling
+    const summaryStartY = memberStartY + 60;
     autoTable(doc, {
-      startY: 85,
-      head: [["Description", "Amount (TK)"]],
+      startY: summaryStartY,
+      head: [[{ content: "FINANCIAL SUMMARY", colSpan: 2, styles: { fillColor: primaryColor, textColor: [255, 255, 255], fontStyle: "bold", halign: "center" } }]],
       body: [
-        ["Total Deposit", totalDeposit.toFixed(2)],
-        ["Previous Due", member.previousDue.toFixed(2)],
-        ["Per Extra", member.perExtra.toFixed(2)],
-        ["Total Expense", totalExpense.toFixed(2)],
-        ["Net Balance", balance.toFixed(2)],
-        border > 0 ? ["Border (Refundable)", border.toFixed(2)] : ["Manager Receivable", managerReceivable.toFixed(2)],
+        [
+          { content: "Total Deposit", styles: { fontStyle: "bold" } },
+          { content: `TK ${totalDeposit.toFixed(2)}`, styles: { halign: "right", textColor: successColor, fontStyle: "bold" } }
+        ],
+        [
+          "Previous Due",
+          { content: `TK ${member.previousDue.toFixed(2)}`, styles: { halign: "right" } }
+        ],
+        [
+          "Per Extra Charge",
+          { content: `TK ${member.perExtra.toFixed(2)}`, styles: { halign: "right" } }
+        ],
+        [
+          "Total Expense",
+          { content: `TK ${totalExpense.toFixed(2)}`, styles: { halign: "right", textColor: dangerColor, fontStyle: "bold" } }
+        ],
+        [
+          { content: "Net Balance", styles: { fontStyle: "bold" } },
+          { 
+            content: `TK ${balance.toFixed(2)}`, 
+            styles: { 
+              halign: "right", 
+              fontStyle: "bold",
+              textColor: balance >= 0 ? successColor : dangerColor
+            } 
+          }
+        ],
+        [
+          { 
+            content: border > 0 ? "Border (Refundable)" : "Manager Receivable", 
+            styles: { fontStyle: "bold" } 
+          },
+          { 
+            content: `TK ${border > 0 ? border.toFixed(2) : managerReceivable.toFixed(2)}`, 
+            styles: { 
+              halign: "right", 
+              fontStyle: "bold",
+              textColor: border > 0 ? successColor : dangerColor
+            } 
+          }
+        ],
       ],
-      theme: "striped",
+      theme: "plain",
+      styles: {
+        fontSize: 10,
+        cellPadding: 8,
+        lineColor: [229, 231, 235],
+        lineWidth: 0.5,
+      },
+      headStyles: {
+        fillColor: primaryColor,
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+      },
+      alternateRowStyles: {
+        fillColor: [249, 250, 251],
+      },
+      columnStyles: {
+        0: { cellWidth: 120 },
+        1: { cellWidth: 70, halign: "right" },
+      },
     });
 
-    // Transactions Table
+    // Transactions Table (if available)
     if (transactions.length > 0) {
       autoTable(doc, {
         startY: (doc as any).lastAutoTable.finalY + 20,
-        head: [["Date", "Type", "Description", "Amount (TK)"]],
+        head: [[
+          { content: "TRANSACTION HISTORY", colSpan: 4, styles: { fillColor: secondaryColor, textColor: [255, 255, 255], fontStyle: "bold", halign: "center" } }
+        ], [
+          "Date",
+          "Type",
+          "Description",
+          "Amount (TK)"
+        ]],
         body: transactions.map((t) => [
           format(new Date(t.date), "dd/MM/yyyy"),
           t.type,
           t.description || "-",
-          t.amount.toFixed(2),
+          { content: `TK ${t.amount.toFixed(2)}`, styles: { halign: "right" } }
         ]),
         theme: "striped",
+        styles: {
+          fontSize: 9,
+          cellPadding: 6,
+        },
+        headStyles: {
+          fillColor: secondaryColor,
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+        },
+        columnStyles: {
+          0: { cellWidth: 30 },
+          1: { cellWidth: 40 },
+          2: { cellWidth: 80 },
+          3: { cellWidth: 40, halign: "right" },
+        },
       });
     }
 
-    // Footer
+    // Modern Footer
     const pageCount = doc.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
-      doc.setFontSize(10);
+      const pageHeight = doc.internal.pageSize.height;
+      
+      // Footer line
+      doc.setDrawColor(...grayColor);
+      doc.setLineWidth(0.5);
+      doc.line(20, pageHeight - 25, 190, pageHeight - 25);
+      
+      // Footer text
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...grayColor);
       doc.text(
-        `Generated on ${format(new Date(), "dd/MM/yyyy HH:mm")}`,
+        `Generated on ${format(new Date(), "dd MMM yyyy, hh:mm a")}`,
         105,
-        doc.internal.pageSize.height - 10,
+        pageHeight - 15,
         { align: "center" }
       );
+      
+      // Page number
+      doc.text(
+        `Page ${i} of ${pageCount}`,
+        105,
+        pageHeight - 10,
+        { align: "center" }
+      );
+      
+      // Footer branding
+      doc.setFontSize(8);
+      doc.text("© KhataX Mess Management System", 105, pageHeight - 5, { align: "center" });
     }
 
     return doc;
@@ -71,29 +221,109 @@ export class PDFGenerator {
   static generateDailyExpenseReport(expenses: DailyExpenseWithUser[]): jsPDF {
     const doc = new jsPDF();
     
-    doc.setFontSize(20);
-    doc.text("Daily Expense Report", 105, 20, { align: "center" });
+    // Modern color scheme
+    const primaryColor = [59, 130, 246]; // Blue
+    const successColor = [34, 197, 94]; // Green
+    const grayColor = [107, 114, 128]; // Gray
+    const lightGray = [243, 244, 246]; // Light gray
 
+    // Modern Header
+    doc.setFillColor(...primaryColor);
+    doc.rect(0, 0, 210, 40, "F");
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.text("DAILY EXPENSE REPORT", 105, 25, { align: "center" });
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Generated on ${format(new Date(), "dd MMM yyyy")}`, 105, 35, { align: "center" });
+
+    doc.setTextColor(0, 0, 0);
+
+    // Expense Table with Modern Styling
     autoTable(doc, {
-      startY: 30,
-      head: [["Date", "Added By", "Bazar/Shop", "Total (TK)", "Extra", "Notes"]],
+      startY: 50,
+      head: [[
+        "Date",
+        "Added By",
+        "Bazar/Shop",
+        "Total (TK)",
+        "Extra (TK)",
+        "Notes"
+      ]],
       body: expenses.map((e) => [
         format(new Date(e.date), "dd/MM/yyyy"),
         e.addedByUser.name,
         e.bazarShop,
-        e.totalTK.toFixed(2),
-        e.extra.toFixed(2),
+        { content: `TK ${e.totalTK.toFixed(2)}`, styles: { halign: "right" } },
+        { content: `TK ${e.extra.toFixed(2)}`, styles: { halign: "right" } },
         e.notes || "-",
       ]),
       theme: "striped",
+      styles: {
+        fontSize: 9,
+        cellPadding: 6,
+        lineColor: [229, 231, 235],
+      },
+      headStyles: {
+        fillColor: primaryColor,
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+      },
+      alternateRowStyles: {
+        fillColor: lightGray,
+      },
+      columnStyles: {
+        0: { cellWidth: 25 },
+        1: { cellWidth: 35 },
+        2: { cellWidth: 40 },
+        3: { cellWidth: 30, halign: "right" },
+        4: { cellWidth: 30, halign: "right" },
+        5: { cellWidth: 50 },
+      },
     });
 
+    // Total Summary
     const total = expenses.reduce((sum, e) => sum + e.totalTK + e.extra, 0);
     autoTable(doc, {
-      startY: (doc as any).lastAutoTable.finalY + 10,
-      body: [["Total Amount", total.toFixed(2)]],
-      theme: "grid",
+      startY: (doc as any).lastAutoTable.finalY + 15,
+      body: [[
+        { 
+          content: "TOTAL AMOUNT", 
+          styles: { fontStyle: "bold", fontSize: 12, fillColor: primaryColor, textColor: [255, 255, 255] } 
+        },
+        { 
+          content: `TK ${total.toFixed(2)}`, 
+          styles: { fontStyle: "bold", fontSize: 12, halign: "right", fillColor: primaryColor, textColor: [255, 255, 255] } 
+        }
+      ]],
+      theme: "plain",
+      styles: {
+        cellPadding: 8,
+      },
+      columnStyles: {
+        0: { cellWidth: 150 },
+        1: { cellWidth: 60, halign: "right" },
+      },
     });
+
+    // Footer
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      const pageHeight = doc.internal.pageSize.height;
+      
+      doc.setDrawColor(...grayColor);
+      doc.setLineWidth(0.5);
+      doc.line(20, pageHeight - 20, 190, pageHeight - 20);
+      
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...grayColor);
+      doc.text("© KhataX Mess Management System", 105, pageHeight - 10, { align: "center" });
+    }
 
     return doc;
   }
@@ -101,20 +331,119 @@ export class PDFGenerator {
   static generateBazarList(bazarList: BazarListWithUser[]): jsPDF {
     const doc = new jsPDF();
     
-    doc.setFontSize(20);
-    doc.text("Bazar Schedule", 105, 20, { align: "center" });
+    // Modern color scheme
+    const primaryColor = [59, 130, 246]; // Blue
+    const secondaryColor = [139, 92, 246]; // Purple
+    const successColor = [34, 197, 94]; // Green
+    const warningColor = [251, 191, 36]; // Yellow
+    const grayColor = [107, 114, 128]; // Gray
+    const lightGray = [243, 244, 246]; // Light gray
 
+    // Modern Header
+    doc.setFillColor(...secondaryColor);
+    doc.rect(0, 0, 210, 40, "F");
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.text("BAZAR SCHEDULE", 105, 25, { align: "center" });
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Total Bazar Assignments: ${bazarList.length}`, 105, 35, { align: "center" });
+
+    doc.setTextColor(0, 0, 0);
+
+    // Bazar List Table with Modern Styling
     autoTable(doc, {
-      startY: 30,
-      head: [["Bazar #", "Date", "Assigned Member", "Status"]],
-      body: bazarList.map((b) => [
-        b.bazarNo.toString(),
-        format(new Date(b.date), "dd/MM/yyyy"),
-        b.assignedToUser.name,
-        b.status,
-      ]),
+      startY: 50,
+      head: [[
+        "Bazar #",
+        "Date",
+        "Assigned Member",
+        "Status"
+      ]],
+      body: bazarList.map((b) => {
+        const statusColor = b.status === "Completed" ? successColor : b.status === "Pending" ? warningColor : grayColor;
+        return [
+          { content: `#${b.bazarNo}`, styles: { fontStyle: "bold" } },
+          format(new Date(b.date), "dd MMM yyyy"),
+          b.assignedToUser.name,
+          { 
+            content: b.status, 
+            styles: { 
+              fillColor: statusColor,
+              textColor: [255, 255, 255],
+              fontStyle: "bold",
+              halign: "center"
+            } 
+          },
+        ];
+      }),
       theme: "striped",
+      styles: {
+        fontSize: 10,
+        cellPadding: 8,
+        lineColor: [229, 231, 235],
+      },
+      headStyles: {
+        fillColor: secondaryColor,
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+      },
+      alternateRowStyles: {
+        fillColor: lightGray,
+      },
+      columnStyles: {
+        0: { cellWidth: 30, halign: "center" },
+        1: { cellWidth: 50 },
+        2: { cellWidth: 80 },
+        3: { cellWidth: 50, halign: "center" },
+      },
     });
+
+    // Summary Statistics
+    const completedCount = bazarList.filter(b => b.status === "Completed").length;
+    const pendingCount = bazarList.filter(b => b.status === "Pending").length;
+    
+    if (bazarList.length > 0) {
+      autoTable(doc, {
+        startY: (doc as any).lastAutoTable.finalY + 15,
+        head: [[
+          { content: "SUMMARY", colSpan: 2, styles: { fillColor: secondaryColor, textColor: [255, 255, 255], fontStyle: "bold", halign: "center" } }
+        ]],
+        body: [
+          ["Total Bazar Assignments", bazarList.length.toString()],
+          ["Completed", completedCount.toString()],
+          ["Pending", pendingCount.toString()],
+        ],
+        theme: "plain",
+        styles: {
+          fontSize: 10,
+          cellPadding: 6,
+        },
+        columnStyles: {
+          0: { cellWidth: 140, fontStyle: "bold" },
+          1: { cellWidth: 50, halign: "center" },
+        },
+      });
+    }
+
+    // Footer
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      const pageHeight = doc.internal.pageSize.height;
+      
+      doc.setDrawColor(...grayColor);
+      doc.setLineWidth(0.5);
+      doc.line(20, pageHeight - 20, 190, pageHeight - 20);
+      
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...grayColor);
+      doc.text("© KhataX Mess Management System", 105, pageHeight - 10, { align: "center" });
+    }
 
     return doc;
   }

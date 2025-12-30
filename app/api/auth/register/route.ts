@@ -3,6 +3,7 @@ import { MemberRegistrationForm, UserRole } from "@/types";
 import connectDB from "@/lib/db";
 import UserModel from "@/app/api/models/User";
 import MemberModel from "@/app/api/models/Member";
+import { generateToken } from "@/lib/jwt";
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,10 +54,21 @@ export async function POST(request: NextRequest) {
       managerReceivable: 0,
     });
 
+    // Generate JWT token
+    const token = await generateToken({
+      userId: user._id.toString(),
+      email: user.email,
+      role: user.role,
+      name: user.name,
+    });
+
     return NextResponse.json({
       success: true,
       message: "User registered successfully",
-      data: { userId: user._id.toString() },
+      data: { 
+        userId: user._id.toString(),
+        token,
+      },
     });
   } catch (error: any) {
     console.error("Registration error:", error);

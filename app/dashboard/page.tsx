@@ -1,31 +1,47 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/layout/navbar";
 import { apiClient } from "@/lib/api-client";
 import { MemberWithUser, DepositLogWithUser } from "@/types";
-import { Download, Wallet, TrendingUp, TrendingDown, DollarSign, History, Clock, Receipt, Calculator, Trash2 } from "lucide-react";
+import { Download, Wallet, History, Clock, Receipt, Plus, Upload, X } from "lucide-react";
 import { PDFGenerator } from "@/lib/pdf-generator";
 import { DepositLogTable } from "@/components/tables/deposit-log-table";
 import { format } from "date-fns";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { PWAInstallPrompt } from "@/components/pwa/install-prompt";
+import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useImageUpload } from "@/hooks/useUpload";
+
+const expenseSchema = z.object({
+  date: z.string(),
+  bazarShop: z.string().min(1),
+  totalTK: z.number().min(0),
+  extra: z.number().min(0),
+  notes: z.string().optional(),
+  bazarListUpload: z.string().optional(),
+});
+
+type ExpenseForm = z.infer<typeof expenseSchema>;
 
 export default function DashboardPage() {
   const currentDate = new Date();
   const currentMonth = currentDate.getMonth() + 1;
   const currentYear = currentDate.getFullYear();
-  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState<string>("");
   const queryClient = useQueryClient();
+  const { uploadImage, isUploading, uploadError, resetError } = useImageUpload();
 
   const { data: memberData, isLoading } = useQuery({
     queryKey: ["member-dashboard"],
@@ -72,31 +88,88 @@ export default function DashboardPage() {
     pdf.save(`invoice-${memberData.user.name}-${currentDate.getMonth() + 1}-${currentDate.getFullYear()}.pdf`);
   };
 
-  const resetDbMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiClient.post("/reset-db");
-      if (!response.success) {
-        throw new Error(response.error || "Failed to reset database");
-      }
-      return response;
+  const { mutate: createExpense, isPending: isCreatingExpense } = useMutation({
+    mutationFn: async (data: ExpenseForm) => {
+      return apiClient.post("/expenses", data);
     },
     onSuccess: () => {
-      setShowResetDialog(false);
-      // Invalidate all queries to refresh data
-      queryClient.invalidateQueries();
-      // Show success message
-      alert("Database reset successfully! All data has been cleared.");
-      // Optionally redirect or reload
-      window.location.href = "/";
-    },
-    onError: (error: Error) => {
-      alert(`Error: ${error.message}`);
+      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["member-dashboard"] });
+      setExpenseDialogOpen(false);
+      reset();
+      setPhotoFile(null);
+      setPhotoPreview(null);
+      setUploadedPhotoUrl("");
+      resetError();
     },
   });
 
-  const handleResetDb = () => {
-    resetDbMutation.mutate();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+    setValue,
+  } = useForm<ExpenseForm>({
+    resolver: zodResolver(expenseSchema),
+    defaultValues: {
+      date: new Date().toISOString().split("T")[0],
+      extra: 0,
+      bazarListUpload: "",
+    },
+  });
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      alert("Please select a valid image file");
+      return;
+    }
+
+    setPhotoFile(file);
+    
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPhotoPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload image
+    resetError();
+    const result = await uploadImage(file);
+    if (result) {
+      setUploadedPhotoUrl(result.url);
+      setValue("bazarListUpload", result.url);
+    } else {
+      setPhotoFile(null);
+      setPhotoPreview(null);
+      if (uploadError) {
+        alert(uploadError);
+      }
+    }
   };
+
+  const handleRemovePhoto = () => {
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setUploadedPhotoUrl("");
+    setValue("bazarListUpload", "");
+    resetError();
+  };
+
+  const onSubmitExpense = (data: ExpenseForm) => {
+    createExpense({
+      ...data,
+      totalTK: Number(data.totalTK),
+      extra: Number(data.extra),
+      bazarListUpload: uploadedPhotoUrl || data.bazarListUpload || "",
+    });
+  };
+
 
   if (isLoading) {
     return (
@@ -158,13 +231,12 @@ export default function DashboardPage() {
               <span className="sm:hidden">Invoice</span>
             </Button>
             <Button 
-              onClick={() => setShowResetDialog(true)} 
-              variant="destructive" 
-              className="bg-red-500/80 backdrop-blur-md border-red-300/30 hover:bg-red-600 shadow-lg w-full sm:w-auto text-sm sm:text-base"
+              onClick={() => setExpenseDialogOpen(true)} 
+              className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg w-full sm:w-auto text-sm sm:text-base"
             >
-              <Trash2 className="mr-2 h-4 w-4" />
-              <span className="hidden sm:inline">Reset Database</span>
-              <span className="sm:hidden">Reset</span>
+              <Plus className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Add Expense</span>
+              <span className="sm:hidden">Expense</span>
             </Button>
           </div>
         </div>
@@ -302,42 +374,151 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-      </div>
+        <Dialog open={expenseDialogOpen} onOpenChange={(open) => {
+          setExpenseDialogOpen(open);
+          if (!open) {
+            reset();
+            setPhotoFile(null);
+            setPhotoPreview(null);
+            setUploadedPhotoUrl("");
+            resetError();
+          }
+        }}>
+          <DialogContent className="w-[90vw] sm:w-[500px] max-h-[90vh] overflow-y-auto bg-white">
+            <DialogClose onClose={() => {
+              setExpenseDialogOpen(false);
+              reset();
+              setPhotoFile(null);
+              setPhotoPreview(null);
+              setUploadedPhotoUrl("");
+              resetError();
+            }} />
+            <DialogHeader>
+              <DialogTitle className="text-lg sm:text-xl">Add Daily Expense</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit(onSubmitExpense)} className="space-y-3 sm:space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="date">Date</Label>
+                <Input id="date" type="date" {...register("date")} />
+                {errors.date && (
+                  <p className="text-sm text-destructive">{errors.date.message}</p>
+                )}
+              </div>
 
-      <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Reset Database</DialogTitle>
-            <DialogDescription>
-              This action will permanently delete ALL data from the database including:
-              <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
-                <li>All users and members</li>
-                <li>All expenses and transactions</li>
-                <li>All deposit logs</li>
-                <li>All bazar lists</li>
-                <li>All other records</li>
-              </ul>
-              <strong className="block mt-3 text-red-600">This action cannot be undone!</strong>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowResetDialog(false)}
-              disabled={resetDbMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleResetDb}
-              disabled={resetDbMutation.isPending}
-            >
-              {resetDbMutation.isPending ? "Resetting..." : "Yes, Reset Database"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              <div className="space-y-2">
+                <Label htmlFor="bazarShop">Bazar/Shop</Label>
+                <Input id="bazarShop" {...register("bazarShop")} />
+                {errors.bazarShop && (
+                  <p className="text-sm text-destructive">{errors.bazarShop.message}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="totalTK">Total TK</Label>
+                  <Input
+                    id="totalTK"
+                    type="number"
+                    step="0.01"
+                    {...register("totalTK", { valueAsNumber: true })}
+                  />
+                  {errors.totalTK && (
+                    <p className="text-sm text-destructive">{errors.totalTK.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="extra">Extra</Label>
+                  <Input
+                    id="extra"
+                    type="number"
+                    step="0.01"
+                    {...register("extra", { valueAsNumber: true })}
+                  />
+                  {errors.extra && (
+                    <p className="text-sm text-destructive">{errors.extra.message}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea id="notes" {...register("notes")} />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="photo">Bazar List Photo (Optional)</Label>
+                {!photoPreview ? (
+                  <div className="flex items-center justify-center w-full">
+                    <label
+                      htmlFor="photo"
+                      className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100"
+                    >
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <Upload className="w-8 h-8 mb-2 text-gray-500" />
+                        <p className="mb-2 text-sm text-gray-500">
+                          <span className="font-semibold">Click to upload</span> or drag and drop
+                        </p>
+                        <p className="text-xs text-gray-500">PNG, JPG, GIF up to 32MB</p>
+                      </div>
+                      <input
+                        id="photo"
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handlePhotoChange}
+                        disabled={isUploading}
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <img
+                      src={photoPreview}
+                      alt="Preview"
+                      className="w-full h-48 object-contain rounded-lg border border-gray-300"
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      className="absolute top-2 right-2"
+                      onClick={handleRemovePhoto}
+                      disabled={isUploading}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                    {isUploading && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-lg">
+                        <p className="text-white">Uploading...</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {uploadError && (
+                  <p className="text-sm text-destructive">{uploadError}</p>
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row justify-end gap-2 sm:space-x-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setExpenseDialogOpen(false)}
+                  className="w-full sm:w-auto"
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isCreatingExpense} className="w-full sm:w-auto">
+                  {isCreatingExpense ? "Adding..." : "Add Expense"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+      </div>
+      <PWAInstallPrompt />
     </div>
   );
 }

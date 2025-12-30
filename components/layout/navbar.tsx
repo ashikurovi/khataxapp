@@ -118,7 +118,7 @@ export function Navbar({ userRole: propUserRole, userName: propUserName, showLog
                     <Button variant="ghost">Dashboard</Button>
                   </Link>
                 )}
-                {(displayRole === "Manager" || displayRole === "Admin") && (
+                {displayRole !== "Member" && (displayRole === "Manager" || displayRole === "Admin") && (
                   <>
                     <Link href="/manager">
                       <Button variant="ghost">Manager Panel</Button>
@@ -188,7 +188,7 @@ export function Navbar({ userRole: propUserRole, userName: propUserName, showLog
                     </Button>
                   </Link>
                 )}
-                {(displayRole === "Manager" || displayRole === "Admin") && (
+                {displayRole !== "Member" && (displayRole === "Manager" || displayRole === "Admin") && (
                   <>
                     <Link href="/manager" className="block">
                       <Button variant="ghost" className="w-full justify-start">

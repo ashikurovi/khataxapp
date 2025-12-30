@@ -64,6 +64,7 @@ export interface DailyExpense {
   totalTK: number;
   extra: number;
   notes: string;
+  approved: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

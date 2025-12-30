@@ -7,7 +7,7 @@ import { Navbar } from "@/components/layout/navbar";
 import { ExpenseTable } from "@/components/tables/expense-table";
 import { apiClient } from "@/lib/api-client";
 import { DailyExpenseWithUser, DailyExpenseForm } from "@/types";
-import { Plus, Download } from "lucide-react";
+import { Plus, Download, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { useForm } from "react-hook-form";
@@ -36,6 +36,8 @@ export default function ExpensesPage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState<string>("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showCheckboxes, setShowCheckboxes] = useState(false);
   const queryClient = useQueryClient();
   const { uploadImage, isUploading, uploadError, resetError } = useImageUpload();
 
@@ -61,6 +63,51 @@ export default function ExpensesPage() {
       resetError();
     },
   });
+
+  const { mutate: bulkDelete, isPending: isDeleting } = useMutation({
+    mutationFn: async (ids: string[]) => {
+      return apiClient.post("/bulk-delete", {
+        table: "dailyExpenses",
+        ids,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["manager-stats"] });
+      setSelectedIds([]);
+      setShowCheckboxes(false);
+      alert("Selected expenses deleted successfully");
+    },
+    onError: (error: Error) => {
+      alert(`Error: ${error.message}`);
+    },
+  });
+
+  const handleSelect = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedIds([...selectedIds, id]);
+    } else {
+      setSelectedIds(selectedIds.filter((selectedId) => selectedId !== id));
+    }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(expenses?.map((e) => e.id) || []);
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) {
+      alert("Please select at least one expense to delete");
+      return;
+    }
+    if (confirm(`Are you sure you want to delete ${selectedIds.length} expense(s)? This action cannot be undone.`)) {
+      bulkDelete(selectedIds);
+    }
+  };
 
   const {
     register,
@@ -151,6 +198,27 @@ export default function ExpensesPage() {
             <p className="text-sm sm:text-base text-gray-600">Track and manage daily expenses</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            {showCheckboxes && selectedIds.length > 0 && (
+              <Button
+                variant="destructive"
+                onClick={handleBulkDelete}
+                disabled={isDeleting}
+                className="bg-red-600 hover:bg-red-700 text-white shadow-lg w-full sm:w-auto text-sm sm:text-base"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {isDeleting ? "Deleting..." : `Delete ${selectedIds.length} Selected`}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCheckboxes(!showCheckboxes);
+                setSelectedIds([]);
+              }}
+              className="bg-white/80 backdrop-blur-md border-white/30 hover:bg-white shadow-lg w-full sm:w-auto text-sm sm:text-base"
+            >
+              {showCheckboxes ? "Cancel Selection" : "Select Items"}
+            </Button>
             <Button variant="outline" onClick={handleExportPDF} className="bg-white/80 backdrop-blur-md border-white/30 hover:bg-white shadow-lg w-full sm:w-auto text-sm sm:text-base">
               <Download className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Export PDF</span>
@@ -172,7 +240,14 @@ export default function ExpensesPage() {
             {isLoading ? (
               <p className="text-gray-600">Loading...</p>
             ) : (
-              <ExpenseTable expenses={expenses || []} showActions />
+              <ExpenseTable
+                expenses={expenses || []}
+                showActions
+                showCheckboxes={showCheckboxes}
+                selectedIds={selectedIds}
+                onSelect={handleSelect}
+                onSelectAll={handleSelectAll}
+              />
             )}
           </CardContent>
         </Card>
