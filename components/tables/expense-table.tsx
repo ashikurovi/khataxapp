@@ -55,7 +55,6 @@ export function ExpenseTable({
               </TableHead>
             )}
             <TableHead>Date</TableHead>
-            <TableHead>Added By</TableHead>
             <TableHead>Bazar/Shop</TableHead>
             <TableHead>Total TK</TableHead>
             <TableHead>Extra</TableHead>
@@ -67,7 +66,7 @@ export function ExpenseTable({
         <TableBody>
           {expenses.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={showCheckboxes ? (showActions ? 9 : 8) : (showActions ? 8 : 7)} className="text-center">
+              <TableCell colSpan={showCheckboxes ? (showActions ? 8 : 7) : (showActions ? 7 : 6)} className="text-center">
                 No expenses found
               </TableCell>
             </TableRow>
@@ -86,9 +85,6 @@ export function ExpenseTable({
                 )}
                 <TableCell>
                   {format(new Date(expense.date), "dd/MM/yyyy")}
-                </TableCell>
-                <TableCell>
-                  {expense.addedByUser ? expense.addedByUser.name : "N/A"}
                 </TableCell>
                 <TableCell>{expense.bazarShop}</TableCell>
                 <TableCell>TK {expense.totalTK.toFixed(2)}</TableCell>

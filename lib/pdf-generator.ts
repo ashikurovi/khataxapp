@@ -247,7 +247,6 @@ export class PDFGenerator {
       startY: 50,
       head: [[
         "Date",
-        "Added By",
         "Bazar/Shop",
         "Total (TK)",
         "Extra (TK)",
@@ -255,7 +254,6 @@ export class PDFGenerator {
       ]],
       body: expenses.map((e) => [
         format(new Date(e.date), "dd/MM/yyyy"),
-        e.addedByUser?.name || "Unknown",
         e.bazarShop,
         { content: `TK ${e.totalTK.toFixed(2)}`, styles: { halign: "right" } },
         { content: `TK ${e.extra.toFixed(2)}`, styles: { halign: "right" } },

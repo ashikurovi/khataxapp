@@ -3,7 +3,6 @@ import mongoose, { Schema, Model } from "mongoose";
 export interface IDailyExpense {
   _id: mongoose.Types.ObjectId;
   date: Date;
-  addedBy?: mongoose.Types.ObjectId | null;
   bazarShop: string;
   bazarListUpload: string;
   totalTK: number;
@@ -19,12 +18,6 @@ const DailyExpenseSchema = new Schema<IDailyExpense>(
     date: {
       type: Date,
       required: true,
-    },
-    addedBy: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-      required: false,
     },
     bazarShop: {
       type: String,
@@ -61,19 +54,9 @@ const DailyExpenseSchema = new Schema<IDailyExpense>(
 
 // Indexes
 DailyExpenseSchema.index({ date: -1 });
-DailyExpenseSchema.index({ addedBy: 1 }, { sparse: true }); // Sparse index allows null values
-
-// Pre-save hook to ensure addedBy is never required
-DailyExpenseSchema.pre('save', function() {
-  // If addedBy is undefined, set it to null
-  if (this.addedBy === undefined) {
-    this.addedBy = null;
-  }
-});
 
 const DailyExpenseModel: Model<IDailyExpense> =
   mongoose.models.DailyExpense ||
   mongoose.model<IDailyExpense>("DailyExpense", DailyExpenseSchema);
 
 export default DailyExpenseModel;
-

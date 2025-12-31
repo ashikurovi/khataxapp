@@ -45,10 +45,10 @@ export async function PATCH(
       // Use full expense amount (not divided per member)
       const expenseAmount = totalExpenseAmount;
 
-      // Update all members: add to totalExpense only (don't deduct from deposit if deposit exists)
+      // Update all members: subtract from deposit and add to total expense
       const updatePromises = members.map(async (member: any) => {
-        // Keep deposit unchanged, only add to total expense
-        const newTotalDeposit = member.totalDeposit; // Deposit remains unchanged
+        // Subtract expense amount from deposit and add to total expense
+        const newTotalDeposit = Math.max(0, member.totalDeposit - expenseAmount);
         const newTotalExpense = member.totalExpense + expenseAmount;
         const newBalanceDue = newTotalDeposit - newTotalExpense;
         
@@ -85,8 +85,8 @@ export async function PATCH(
       }).lean();
 
       const heshabUpdatePromises = heshabRecords.map(async (heshab: any) => {
-        // Keep deposit unchanged, only add to total expense
-        const newDeposit = heshab.deposit; // Deposit remains unchanged
+        // Subtract expense amount from deposit and add to total expense
+        const newDeposit = Math.max(0, heshab.deposit - expenseAmount);
         const newTotalExpense = heshab.totalExpense + expenseAmount;
         
         // Recalculate balance: (deposit + perExtra) - totalExpense
@@ -116,7 +116,7 @@ export async function PATCH(
 
     return NextResponse.json({
       success: true,
-      message: "Expense approved: added to total expense (deposit unchanged)",
+      message: "Expense approved: deducted from deposit and added to total expense",
       data: { id: expense._id.toString() },
     });
   } catch (error: any) {

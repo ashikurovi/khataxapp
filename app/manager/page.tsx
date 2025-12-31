@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/layout/navbar";
 import { apiClient } from "@/lib/api-client";
 import { MemberWithUser, DailyExpenseWithUser, DepositLogWithUser, DailyExtraWithUser } from "@/types";
-import { Users, DollarSign, Wallet, CheckCircle2, Trash2 } from "lucide-react";
+import { Users, Wallet, CheckCircle2, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
@@ -251,7 +251,7 @@ export default function ManagerDashboardPage() {
         </Card>
 
         {/* Summary Cards for Totals */}
-        <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mb-6 sm:mb-8">
+        <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 mb-6 sm:mb-8">
           <Card className="bg-white/80 backdrop-blur-lg border-white/20 shadow-lg hover:shadow-xl transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Total Members</CardTitle>
@@ -271,18 +271,6 @@ export default function ManagerDashboardPage() {
             <CardContent>
               <div className="text-2xl sm:text-3xl font-bold text-emerald-600 break-words">
                 TK {stats?.totalDeposits.toFixed(2) || "0.00"}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/80 backdrop-blur-lg border-white/20 shadow-lg hover:shadow-xl transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Total Expense</CardTitle>
-              <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-red-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold text-red-600 break-words">
-                TK {stats?.totalExpenses.toFixed(2) || "0.00"}
               </div>
             </CardContent>
           </Card>
@@ -306,7 +294,7 @@ export default function ManagerDashboardPage() {
                     key={expense.id}
                     className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 sm:p-4 bg-white/60 backdrop-blur-md border border-white/30 rounded-lg hover:bg-white/80 transition-all"
                   >
-                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Date</p>
                         <p className="text-sm font-medium text-gray-900">
@@ -321,12 +309,6 @@ export default function ManagerDashboardPage() {
                         <p className="text-xs text-gray-500 mb-1">Amount</p>
                         <p className="text-sm font-medium text-gray-900">
                           TK {(expense.totalTK + expense.extra).toFixed(2)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Added By</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {expense.addedByUser ? expense.addedByUser.name : "N/A"}
                         </p>
                       </div>
                     </div>

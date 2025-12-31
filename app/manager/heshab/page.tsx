@@ -7,8 +7,8 @@ import { Navbar } from "@/components/layout/navbar";
 import { HeshabTable } from "@/components/tables/heshab-table";
 import { apiClient } from "@/lib/api-client";
 import { HeshabWithUser, MemberWithUser } from "@/types";
-import { Plus, Mail, Download } from "lucide-react";
-import { useState } from "react";
+import { Plus, Mail, Download, Search } from "lucide-react";
+import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -36,6 +36,7 @@ export default function HeshabPage() {
   const [currentExpense, setCurrentExpense] = useState<number>(0);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
+  const [searchTerm, setSearchTerm] = useState("");
   const queryClient = useQueryClient();
 
   const { data: heshabRecords, isLoading } = useQuery({
@@ -87,6 +88,36 @@ export default function HeshabPage() {
     },
   });
 
+  const { mutate: updateHeshab, isPending: isUpdatingHeshab } = useMutation({
+    mutationFn: async (data: {
+      heshabId: string;
+      deposit?: number;
+      perExtra?: number;
+      totalExpense?: number;
+      border?: number;
+      managerReceivable?: number;
+    }) => {
+      return apiClient.put("/heshab", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["heshab"] });
+      queryClient.invalidateQueries({ queryKey: ["members"] });
+    },
+  });
+
+  const handleUpdateHeshab = (
+    heshabId: string,
+    data: {
+      deposit?: number;
+      perExtra?: number;
+      totalExpense?: number;
+      border?: number;
+      managerReceivable?: number;
+    }
+  ) => {
+    updateHeshab({ heshabId, ...data });
+  };
+
   const handleExportExcel = () => {
     const url = `/api/heshab/export-excel?month=${month}&year=${year}`;
     window.open(url, "_blank");
@@ -129,6 +160,15 @@ export default function HeshabPage() {
       updateExpense({ heshabId: selectedHeshabId, totalExpense: newExpense });
     }
   };
+
+  const filteredHeshabRecords = useMemo(() => {
+    if (!heshabRecords) return [];
+    if (!searchTerm.trim()) return heshabRecords;
+    
+    return heshabRecords.filter((heshab) =>
+      heshab.user.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [heshabRecords, searchTerm]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden">
@@ -193,17 +233,32 @@ export default function HeshabPage() {
 
         <Card className="bg-white/80 backdrop-blur-lg border-white/20 shadow-lg">
           <CardHeader>
-            <CardTitle className="text-gray-900">Heshab Table</CardTitle>
-            <CardDescription className="text-gray-600">
-              Monthly heshab records with deposits and balances
-            </CardDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <CardTitle className="text-gray-900">Heshab Table</CardTitle>
+                <CardDescription className="text-gray-600">
+                  Monthly heshab records with deposits and balances
+                </CardDescription>
+              </div>
+              <div className="relative w-full sm:w-auto sm:min-w-[250px]">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="Search by member name..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 bg-white/80 backdrop-blur-md border-white/30"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <p className="text-gray-600">Loading...</p>
             ) : (
               <HeshabTable 
-                heshabRecords={heshabRecords || []} 
+                heshabRecords={filteredHeshabRecords} 
+                onUpdate={handleUpdateHeshab}
                 onUpdateExpense={handleUpdateExpense}
               />
             )}

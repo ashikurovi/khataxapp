@@ -2,24 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { DailyExpenseWithUser } from "@/types";
 import connectDB from "@/lib/db";
 import DailyExpenseModel from "@/app/api/models/DailyExpense";
-import UserModel from "@/app/api/models/User";
 import MemberModel from "@/app/api/models/Member";
 
 export async function GET(request: NextRequest) {
   try {
     await connectDB();
     const expenses = await DailyExpenseModel.find()
-      .populate("addedBy")
       .sort({ date: -1 })
       .lean();
 
     const expensesWithUser: DailyExpenseWithUser[] = expenses.map((expense: any) => {
-      const addedBy = expense.addedBy && typeof expense.addedBy === 'object' ? expense.addedBy : null;
-      
       return {
         id: expense._id.toString(),
         date: expense.date,
-        addedBy: addedBy ? addedBy._id.toString() : null,
         bazarShop: expense.bazarShop,
         bazarListUpload: expense.bazarListUpload,
         totalTK: expense.totalTK,
@@ -28,19 +23,8 @@ export async function GET(request: NextRequest) {
         approved: expense.approved || false,
         createdAt: expense.createdAt,
         updatedAt: expense.updatedAt,
-        addedByUser: addedBy ? {
-          id: addedBy._id.toString(),
-          name: addedBy.name,
-          dept: addedBy.dept,
-          institute: addedBy.institute,
-          phone: addedBy.phone,
-          email: addedBy.email,
-          picture: addedBy.picture,
-          googleId: addedBy.googleId,
-          role: addedBy.role,
-          createdAt: addedBy.createdAt,
-          updatedAt: addedBy.updatedAt,
-        } : null,
+        addedBy: null,
+        addedByUser: null,
       };
     });
 
@@ -60,22 +44,80 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
-    const data = await request.json();
+    
+    // Parse request body with error handling
+    let data;
+    try {
+      data = await request.json();
+    } catch (parseError: any) {
+      return NextResponse.json(
+        { success: false, error: "Invalid JSON in request body" },
+        { status: 400 }
+      );
+    }
 
-    // Get userId from headers (preferred) or request body (fallback)
-    // User ID is optional - if not provided, expense will be created without an assigned user
-    const addedBy = request.headers.get("x-user-id") || data.addedBy || data.userId || null;
+    // Validate required fields
+    if (!data.date) {
+      return NextResponse.json(
+        { success: false, error: "Date is required" },
+        { status: 400 }
+      );
+    }
 
-    // Build expense object - addedBy is optional
+    if (!data.bazarShop || typeof data.bazarShop !== 'string' || data.bazarShop.trim() === '') {
+      return NextResponse.json(
+        { success: false, error: "Bazar shop is required" },
+        { status: 400 }
+      );
+    }
+
+    if (data.totalTK === undefined || data.totalTK === null) {
+      return NextResponse.json(
+        { success: false, error: "Total TK is required" },
+        { status: 400 }
+      );
+    }
+
+    if (typeof data.totalTK !== 'number' || data.totalTK < 0) {
+      return NextResponse.json(
+        { success: false, error: "Total TK must be a non-negative number" },
+        { status: 400 }
+      );
+    }
+
+    // Validate and parse date
+    let expenseDate: Date;
+    try {
+      expenseDate = new Date(data.date);
+      if (isNaN(expenseDate.getTime())) {
+        throw new Error("Invalid date");
+      }
+    } catch (dateError) {
+      return NextResponse.json(
+        { success: false, error: "Invalid date format" },
+        { status: 400 }
+      );
+    }
+
+    // Validate extra field if provided
+    if (data.extra !== undefined && data.extra !== null) {
+      if (typeof data.extra !== 'number' || data.extra < 0) {
+        return NextResponse.json(
+          { success: false, error: "Extra must be a non-negative number" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Build expense object
     // Expenses are created as pending (approved: false) and only added to total expense when approved
     const expenseData: any = {
-      date: new Date(data.date),
-      bazarShop: data.bazarShop,
+      date: expenseDate,
+      bazarShop: data.bazarShop.trim(),
       bazarListUpload: data.bazarListUpload || "",
       totalTK: data.totalTK,
       extra: data.extra || 0,
       notes: data.notes || "",
-      addedBy: addedBy || null, // Explicitly set to null if not provided
       approved: false, // New expenses are pending approval
     };
 
@@ -91,6 +133,24 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error("Create expense error:", error);
+    
+    // Handle Mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors || {}).map((err: any) => err.message).join(', ');
+      return NextResponse.json(
+        { success: false, error: `Validation error: ${validationErrors}` },
+        { status: 400 }
+      );
+    }
+
+    // Handle Mongoose cast errors (e.g., invalid ObjectId)
+    if (error.name === 'CastError') {
+      return NextResponse.json(
+        { success: false, error: `Invalid data format: ${error.message}` },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
       { success: false, error: error.message || "Failed to create expense" },
       { status: 500 }

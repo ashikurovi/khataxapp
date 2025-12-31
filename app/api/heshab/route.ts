@@ -367,16 +367,23 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT endpoint to update total expense for existing heshab record
+// PUT endpoint to update heshab record fields
 export async function PUT(request: NextRequest) {
   try {
     await connectDB();
     const data = await request.json();
-    const { heshabId, totalExpense } = data;
+    const { 
+      heshabId, 
+      deposit, 
+      perExtra, 
+      totalExpense, 
+      border, 
+      managerReceivable 
+    } = data;
 
-    if (!heshabId || totalExpense === undefined) {
+    if (!heshabId) {
       return NextResponse.json(
-        { success: false, error: "Heshab ID and total expense are required" },
+        { success: false, error: "Heshab ID is required" },
         { status: 400 }
       );
     }
@@ -390,42 +397,67 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Calculate perExtra from daily extras for the month
-    const dailyExtras = await DailyExtraModel.find({
-      date: {
-        $gte: new Date(existingHeshab.year, existingHeshab.month - 1, 1),
-        $lt: new Date(existingHeshab.year, existingHeshab.month, 1),
-      },
-    }).lean();
+    // Use provided values or calculate/keep existing values
+    const updatedDeposit = deposit !== undefined ? deposit : existingHeshab.deposit;
+    
+    // Calculate perExtra from daily extras if not provided
+    let updatedPerExtra = perExtra;
+    if (updatedPerExtra === undefined) {
+      const dailyExtras = await DailyExtraModel.find({
+        date: {
+          $gte: new Date(existingHeshab.year, existingHeshab.month - 1, 1),
+          $lt: new Date(existingHeshab.year, existingHeshab.month, 1),
+        },
+      }).lean();
+      const totalExtra = dailyExtras.reduce((sum, extra) => sum + extra.amount, 0);
+      const memberCount = await MemberModel.countDocuments();
+      updatedPerExtra = memberCount > 0 ? totalExtra / memberCount : existingHeshab.perExtra;
+    }
 
-    const totalExtra = dailyExtras.reduce((sum, extra) => sum + extra.amount, 0);
-    const memberCount = await MemberModel.countDocuments();
-    const perExtra = memberCount > 0 ? totalExtra / memberCount : 0;
+    const updatedTotalExpense = totalExpense !== undefined ? totalExpense : existingHeshab.totalExpense;
 
     // Calculate balance: (deposit + perExtra) - totalExpense
-    const calculatedBalance = existingHeshab.deposit + perExtra - totalExpense;
+    const calculatedBalance = updatedDeposit + updatedPerExtra - updatedTotalExpense;
     
-    // Calculate border and managerReceivable
-    let border = 0;
-    let due = 0;
+    // Use provided border/managerReceivable or calculate from balance
+    let updatedBorder = border;
+    let updatedDue = managerReceivable;
     let currentBalance = calculatedBalance;
     
-    if (calculatedBalance > 0) {
-      border = calculatedBalance;
-      currentBalance = calculatedBalance;
-    } else if (calculatedBalance < 0) {
-      due = Math.abs(calculatedBalance);
-      currentBalance = calculatedBalance;
+    if (updatedBorder !== undefined && updatedBorder >= 0) {
+      // Border is manually set
+      currentBalance = updatedBorder;
+      updatedDue = 0;
+    } else if (updatedDue !== undefined && updatedDue >= 0) {
+      // Manager receivable is manually set
+      currentBalance = -updatedDue;
+      updatedBorder = 0;
+    } else {
+      // Calculate from balance
+      if (calculatedBalance > 0) {
+        updatedBorder = calculatedBalance;
+        updatedDue = 0;
+        currentBalance = calculatedBalance;
+      } else if (calculatedBalance < 0) {
+        updatedDue = Math.abs(calculatedBalance);
+        updatedBorder = 0;
+        currentBalance = calculatedBalance;
+      } else {
+        updatedBorder = 0;
+        updatedDue = 0;
+        currentBalance = 0;
+      }
     }
 
     // Update heshab record
     const updatedHeshab = await HeshabModel.findByIdAndUpdate(
       heshabId,
       {
-        perExtra,
-        totalExpense,
+        deposit: updatedDeposit,
+        perExtra: updatedPerExtra,
+        totalExpense: updatedTotalExpense,
         currentBalance,
-        due,
+        due: updatedDue,
       },
       { new: true }
     ).populate("userId");
@@ -433,18 +465,18 @@ export async function PUT(request: NextRequest) {
     // Update Member model
     const member = await MemberModel.findOne({ userId: existingHeshab.userId });
     if (member) {
-      member.border = border;
-      member.managerReceivable = due;
-      member.totalExpense = totalExpense;
-      member.perExtra = perExtra;
-      member.balanceDue = due;
+      member.border = updatedBorder;
+      member.managerReceivable = updatedDue;
+      member.totalExpense = updatedTotalExpense;
+      member.perExtra = updatedPerExtra;
+      member.balanceDue = updatedDue;
       await member.save();
     }
 
     return NextResponse.json({
       success: true,
       data: updatedHeshab,
-      message: "Total expense updated successfully",
+      message: "Heshab record updated successfully",
     });
   } catch (error: any) {
     console.error("Update heshab error:", error);

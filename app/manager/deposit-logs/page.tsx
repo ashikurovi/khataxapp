@@ -5,38 +5,50 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Navbar } from "@/components/layout/navbar";
 import { DepositLogTable } from "@/components/tables/deposit-log-table";
 import { apiClient } from "@/lib/api-client";
-import { DepositLogWithUser, MemberWithUser } from "@/types";
-import { useState } from "react";
+import { DepositLogWithUser } from "@/types";
+import { useMemo, useState } from "react";
+import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
 
 export default function DepositLogsPage() {
-  const [month, setMonth] = useState<number | null>(new Date().getMonth() + 1);
-  const [year, setYear] = useState<number | null>(new Date().getFullYear());
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const today = new Date();
+  const todayMonth = today.getMonth() + 1;
+  const todayYear = today.getFullYear();
 
-  const { data: members } = useQuery({
-    queryKey: ["members"],
-    queryFn: async () => {
-      const response = await apiClient.get<MemberWithUser[]>("/members");
-      return response.data || [];
-    },
-  });
-
-  const { data: depositLogs, isLoading } = useQuery({
-    queryKey: ["deposit-logs", month, year, selectedUserId],
+  const { data: allDepositLogs, isLoading } = useQuery({
+    queryKey: ["deposit-logs", todayMonth, todayYear],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (month) params.append("month", month.toString());
-      if (year) params.append("year", year.toString());
-      if (selectedUserId) params.append("userId", selectedUserId);
+      params.append("month", todayMonth.toString());
+      params.append("year", todayYear.toString());
       
       const response = await apiClient.get<DepositLogWithUser[]>(
         `/heshab/deposit-logs?${params.toString()}`
       );
       return response.data || [];
     },
-    enabled: !!(month && year),
   });
+
+  // Filter to show only today's logs and apply search
+  const depositLogs = useMemo(() => {
+    if (!allDepositLogs) return [];
+    const todayStr = format(today, "yyyy-MM-dd");
+    let filtered = allDepositLogs.filter((log) => {
+      const logDateStr = format(new Date(log.date), "yyyy-MM-dd");
+      return logDateStr === todayStr;
+    });
+    
+    // Apply search filter if search term exists
+    if (searchTerm.trim()) {
+      filtered = filtered.filter((log) =>
+        log.user.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    return filtered;
+  }, [allDepositLogs, today, searchTerm]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden">
@@ -49,55 +61,31 @@ export default function DepositLogsPage() {
 
       <Navbar userRole="Manager" />
       <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 relative z-10">
-        <div className="mb-4 sm:mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-          <div>
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">Deposit Logs</h1>
-            <p className="text-sm sm:text-base text-gray-600">View daily deposit records</p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <div className="flex gap-2">
-              <Input
-                type="number"
-                min="1"
-                max="12"
-                value={month || ""}
-                onChange={(e) => setMonth(e.target.value ? Number(e.target.value) : null)}
-                className="w-20 bg-white/80 backdrop-blur-md border-white/30"
-                placeholder="Month"
-              />
-              <Input
-                type="number"
-                min="2020"
-                max="2100"
-                value={year || ""}
-                onChange={(e) => setYear(e.target.value ? Number(e.target.value) : null)}
-                className="w-24 bg-white/80 backdrop-blur-md border-white/30"
-                placeholder="Year"
-              />
-            </div>
-            <select
-              value={selectedUserId || ""}
-              onChange={(e) => setSelectedUserId(e.target.value || null)}
-              className="flex h-10 rounded-md border border-input bg-white/80 backdrop-blur-md px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <option value="">All Members</option>
-              {members?.map((member) => (
-                <option key={member.id} value={member.userId}>
-                  {member.user.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="mb-4 sm:mb-6">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">Deposit Logs</h1>
+          <p className="text-sm sm:text-base text-gray-600">View daily deposit records</p>
         </div>
 
         <Card className="bg-white/80 backdrop-blur-lg border-white/20 shadow-lg">
           <CardHeader>
-            <CardTitle className="text-gray-900">Deposit Log</CardTitle>
-            <CardDescription className="text-gray-600">
-              {month && year
-                ? `Daily deposit records for ${month}/${year}${selectedUserId ? ` - ${members?.find((m) => m.userId === selectedUserId)?.user.name || ""}` : ""}`
-                : "Select month and year to view deposit logs"}
-            </CardDescription>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <CardTitle className="text-gray-900">Today's Deposit Logs</CardTitle>
+                <CardDescription className="text-gray-600">
+                  Deposit records for {format(today, "dd MMMM yyyy")}
+                </CardDescription>
+              </div>
+              <div className="relative w-full sm:w-auto sm:min-w-[250px]">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="Search by member name..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 bg-white/80 backdrop-blur-md border-white/30"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -111,4 +99,3 @@ export default function DepositLogsPage() {
     </div>
   );
 }
-
