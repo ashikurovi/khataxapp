@@ -15,51 +15,54 @@ export default function ManagerLoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    try {
-      // Call API login endpoint to get JWT token
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
+    // Local authentication - no API call needed
+    const MANAGER_EMAIL = "manager@gmail.com";
+    const MANAGER_PASSWORD = "manager123";
 
-      const data = await response.json();
+    // Simulate loading delay for better UX
+    setTimeout(() => {
+      try {
+        // Validate credentials locally
+        if (email.toLowerCase() !== MANAGER_EMAIL.toLowerCase()) {
+          setError("Invalid email or password");
+          setLoading(false);
+          return;
+        }
 
-      if (!response.ok || !data.success) {
-        setError(data.error || "Invalid email or password");
+        if (password !== MANAGER_PASSWORD) {
+          setError("Invalid email or password");
+          setLoading(false);
+          return;
+        }
+
+        // Generate a simple local token (timestamp-based identifier)
+        const localToken = `local_manager_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+        // Store user data and token in localStorage
+        localStorage.setItem("authToken", localToken);
+        localStorage.setItem(
+          "user",
+          JSON.stringify({
+            userId: "local_manager_user",
+            email: MANAGER_EMAIL,
+            name: "Manager",
+            role: "Manager",
+          })
+        );
+        localStorage.setItem("authType", "manager");
+
+        // Redirect to manager panel
+        router.push("/manager");
+      } catch (err: any) {
+        setError(err.message || "Login failed. Please try again.");
         setLoading(false);
-        return;
       }
-
-      // Store user data and token in localStorage
-      if (data.data.token) {
-        localStorage.setItem("authToken", data.data.token);
-      }
-      localStorage.setItem(
-        "user",
-        JSON.stringify({
-          userId: data.data.userId,
-          email: data.data.email,
-          name: data.data.name,
-          role: data.data.role,
-        })
-      );
-      localStorage.setItem("authType", "manager");
-
-      // Redirect to manager panel
-      router.push("/manager");
-    } catch (err: any) {
-      setError(err.message || "Login failed. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    }, 300); // Small delay for better UX
   };
 
   return (
