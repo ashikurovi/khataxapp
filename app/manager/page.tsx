@@ -6,8 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/layout/navbar";
 import { apiClient } from "@/lib/api-client";
-import { MemberWithUser, DailyExpenseWithUser, DepositLogWithUser } from "@/types";
-import { Users, DollarSign, FileText, TrendingUp, Wallet, CheckCircle2, Trash2 } from "lucide-react";
+import { MemberWithUser, DailyExpenseWithUser, DepositLogWithUser, DailyExtraWithUser } from "@/types";
+import { Users, DollarSign, Wallet, CheckCircle2, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
@@ -29,34 +29,41 @@ export default function ManagerDashboardPage() {
   const { data: stats } = useQuery({
     queryKey: ["manager-stats"],
     queryFn: async () => {
-      const [membersRes, expensesRes, depositLogsRes] = await Promise.all([
+      const [membersRes, expensesRes, depositLogsRes, dailyExtrasRes] = await Promise.all([
         apiClient.get<MemberWithUser[]>("/members"),
         apiClient.get<DailyExpenseWithUser[]>("/expenses"),
         apiClient.get<DepositLogWithUser[]>(
           `/heshab/deposit-logs?month=${currentMonth}&year=${currentYear}`
         ),
+        apiClient.get<DailyExtraWithUser[]>("/daily-extra"),
       ]);
 
       const members = membersRes.data || [];
       const expenses = expensesRes.data || [];
       const depositLogs = depositLogsRes.data || [];
+      const dailyExtras = dailyExtrasRes.data || [];
 
-      const totalManagerReceivable = members.reduce(
-        (sum, m) => sum + m.managerReceivable,
+      // Calculate total daily extra amount
+      const totalDailyExtra = dailyExtras.reduce(
+        (sum, extra) => sum + extra.amount,
         0
       );
-      const totalBorder = members.reduce((sum, m) => sum + m.border, 0);
+
       // Total expense should come from members' totalExpense (includes approved expenses + daily extras)
-      // This ensures daily extras are included in the total
+      // Add total daily extra amount to total expenses
       const totalExpenses = members.reduce(
         (sum, m) => sum + m.totalExpense,
         0
-      );
+      ) + totalDailyExtra;
+      
       // Only count approved expenses for the graph (daily extras are not shown in expense graph)
       const approvedExpenses = expenses.filter(e => e.approved);
       const pendingExpenses = expenses.filter(e => !e.approved);
-      const totalDeposits = depositLogs.reduce(
-        (sum, log) => sum + log.amount,
+      
+      // Calculate total deposits from members' totalDeposit (this reflects deductions from approved expenses)
+      // This is the actual current deposit amount after all expenses have been deducted
+      const totalDeposits = members.reduce(
+        (sum, m) => sum + m.totalDeposit,
         0
       );
 
@@ -90,8 +97,6 @@ export default function ManagerDashboardPage() {
 
       return {
         totalMembers: members.length,
-        totalManagerReceivable,
-        totalBorder,
         totalExpenses,
         totalDeposits,
         dailyCostsData,
@@ -111,6 +116,7 @@ export default function ManagerDashboardPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["manager-stats"] });
       queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["members"] });
     },
     onError: (error: Error) => {
       alert(`Error: ${error.message}`);
@@ -220,7 +226,7 @@ export default function ManagerDashboardPage() {
         </Card>
 
         {/* Summary Cards for Totals */}
-        <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 mb-6 sm:mb-8">
+        <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mb-6 sm:mb-8">
           <Card className="bg-white/80 backdrop-blur-lg border-white/20 shadow-lg hover:shadow-xl transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Total Members</CardTitle>
@@ -252,30 +258,6 @@ export default function ManagerDashboardPage() {
             <CardContent>
               <div className="text-2xl sm:text-3xl font-bold text-red-600 break-words">
                 TK {stats?.totalExpenses.toFixed(2) || "0.00"}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/80 backdrop-blur-lg border-white/20 shadow-lg hover:shadow-xl transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Total Border</CardTitle>
-              <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold text-indigo-600 break-words">
-                TK {stats?.totalBorder.toFixed(2) || "0.00"}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/80 backdrop-blur-lg border-white/20 shadow-lg hover:shadow-xl transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium text-gray-700">Total Receivable</CardTitle>
-              <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl sm:text-3xl font-bold text-purple-600 break-words">
-                TK {stats?.totalManagerReceivable.toFixed(2) || "0.00"}
               </div>
             </CardContent>
           </Card>

@@ -114,41 +114,60 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Step 2: If there's border amount, add it to the deposit and clear border
-      // Example: Border = 200, Deposit = 200 → Total deposit = existing + 200 + 200 (border) = 400, Border = 0
-      if (existingBorder > 0) {
-        finalDeposit = existingHeshab.deposit + remainingDeposit + existingBorder;
-      } else {
-        finalDeposit = existingHeshab.deposit + remainingDeposit;
-      }
+      // Step 2: Add remaining deposit to existing deposit
+      // The existing deposit already contains all previous deposits, so we just add the new remaining amount
+      // Note: Border is the positive balance and should NOT be added to deposit - it's calculated separately
+      finalDeposit = existingHeshab.deposit + remainingDeposit;
     }
 
     // Calculate balance: (deposit + perExtra) - totalExpense
-    // When manager receivable is paid, it reduces the negative balance
-    // So we add the payment amount to the balance calculation
-    const calculatedBalance = finalDeposit + perExtra - data.totalExpense + paidToReceivable;
+    const calculatedBalance = finalDeposit + perExtra - data.totalExpense;
+    
+    // Calculate remaining receivable after payment from deposit
+    // This is the receivable that remains after the deposit payment
+    // IMPORTANT: This should always be shown if it exists, regardless of balance
+    let remainingReceivable = 0;
+    if (existingHeshab && existingHeshab.due) {
+      remainingReceivable = Math.max(0, existingHeshab.due - paidToReceivable);
+    }
     
     // Calculate border and managerReceivable based on the formula
+    // The remaining receivable after deposit payment should always be preserved and shown
+    // The balance calculation is separate and only affects additional receivable or border
     let border = 0;
-    let due = 0;
+    let due = remainingReceivable; // Always preserve remaining receivable after payment
     let currentBalance = calculatedBalance;
     
+    // The balance calculation is separate from the remaining receivable
+    // If balance is positive, it goes to border (but remaining receivable stays)
+    // If balance is negative, it adds to the remaining receivable
+    // Only if balance is positive AND greater than remaining receivable, it clears the receivable
     if (calculatedBalance > 0) {
-      // If positive: (deposit + perExtra) > totalExpense
-      // The positive amount goes to Border
-      border = calculatedBalance;
-      currentBalance = calculatedBalance;
-      due = 0; // Clear manager receivable when balance is positive
+      // Positive balance: goes to border
+      // Check if it can cover remaining receivable
+      if (calculatedBalance > remainingReceivable) {
+        // Positive balance is more than remaining receivable
+        // Remaining receivable is cleared, excess goes to border
+        border = calculatedBalance - remainingReceivable;
+        due = 0; // All receivable cleared by positive balance
+        currentBalance = calculatedBalance;
+      } else {
+        // Positive balance but less than or equal to remaining receivable
+        // Show the remaining receivable (positive balance doesn't fully cover it)
+        due = remainingReceivable;
+        border = 0; // No border, receivable still exists
+        currentBalance = calculatedBalance - remainingReceivable; // Effective balance is negative
+      }
     } else if (calculatedBalance < 0) {
-      // If negative: (deposit + perExtra) < totalExpense
-      // The absolute value goes to Manager Receivable
-      due = Math.abs(calculatedBalance);
+      // Negative balance: adds to remaining receivable
+      due = remainingReceivable + Math.abs(calculatedBalance);
       currentBalance = calculatedBalance;
       border = 0; // Clear border when balance is negative
     } else {
       // Balance is exactly 0
+      // Show the remaining receivable as is (if any)
+      due = remainingReceivable;
       border = 0;
-      due = 0;
       currentBalance = 0;
     }
     
@@ -158,7 +177,8 @@ export async function POST(request: NextRequest) {
       // Adjust currentBalance if border is manually set
       if (border > 0) {
         currentBalance = border;
-        due = 0;
+        // Don't clear due if manually setting border - preserve remaining receivable
+        // due = 0; // Removed - preserve remaining receivable
       }
     }
     
