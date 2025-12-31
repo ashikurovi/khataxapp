@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 interface PopoverContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
-  triggerRef: React.RefObject<HTMLDivElement>;
+  triggerRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const PopoverContext = React.createContext<PopoverContextValue | undefined>(undefined);

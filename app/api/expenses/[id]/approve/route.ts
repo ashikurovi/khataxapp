@@ -45,11 +45,11 @@ export async function PATCH(
       // Use full expense amount (not divided per member)
       const expenseAmount = totalExpenseAmount;
 
-      // Update all members: subtract from deposit and add to total expense
+      // Update all members: subtract from deposit only (totalExpense is manual)
       const updatePromises = members.map(async (member: any) => {
-        // Subtract expense amount from deposit and add to total expense
+        // Subtract expense amount from deposit only, keep totalExpense unchanged (manual)
         const newTotalDeposit = Math.max(0, member.totalDeposit - expenseAmount);
-        const newTotalExpense = member.totalExpense + expenseAmount;
+        const newTotalExpense = member.totalExpense; // Keep existing totalExpense (manual)
         const newBalanceDue = newTotalDeposit - newTotalExpense;
         
         // Calculate border and managerReceivable based on balance
@@ -85,9 +85,9 @@ export async function PATCH(
       }).lean();
 
       const heshabUpdatePromises = heshabRecords.map(async (heshab: any) => {
-        // Subtract expense amount from deposit and add to total expense
+        // Subtract expense amount from deposit only, keep totalExpense unchanged (manual)
         const newDeposit = Math.max(0, heshab.deposit - expenseAmount);
-        const newTotalExpense = heshab.totalExpense + expenseAmount;
+        const newTotalExpense = heshab.totalExpense; // Keep existing totalExpense (manual)
         
         // Recalculate balance: (deposit + perExtra) - totalExpense
         const calculatedBalance = newDeposit + heshab.perExtra - newTotalExpense;
@@ -116,7 +116,7 @@ export async function PATCH(
 
     return NextResponse.json({
       success: true,
-      message: "Expense approved: deducted from deposit and added to total expense",
+      message: "Expense approved: deducted from deposit (total expense is manual)",
       data: { id: expense._id.toString() },
     });
   } catch (error: any) {
