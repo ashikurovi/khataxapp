@@ -4,6 +4,8 @@ import "./globals.css";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { Toaster } from "sonner";
 import { ServiceWorkerRegister } from "./sw-register";
+import { Suspense } from "react";
+import { TokenHandler } from "@/components/auth/token-handler";
 
 const baiJamjuree = Bai_Jamjuree({
   subsets: ["latin"],
@@ -56,8 +58,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-       className={`${baiJamjuree.className}  antialiased`}
+       className={`${baiJamjuree.className} bg-white   antialiased` } 
       >
+        <Suspense fallback={null}>
+          <TokenHandler />
+        </Suspense>
         <QueryProvider>{children}</QueryProvider>
         <Toaster position="top-center" richColors />
         <ServiceWorkerRegister />

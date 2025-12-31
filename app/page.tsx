@@ -18,10 +18,43 @@ import {
 export default function LandingPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    
+    // Check if user is already logged in
+    const checkAuth = () => {
+      if (typeof window === "undefined") {
+        setCheckingAuth(false);
+        return;
+      }
+
+      const token = localStorage.getItem("authToken");
+      const userDataStr = localStorage.getItem("user");
+
+      if (token && userDataStr) {
+        try {
+          const userData = JSON.parse(userDataStr);
+          const role = userData.role;
+
+          // Redirect based on role (use replace to avoid adding to history)
+          if (role === "Manager" || role === "Admin") {
+            router.replace("/manager");
+          } else {
+            router.replace("/dashboard");
+          }
+          return; // Don't set checkingAuth to false, let redirect happen
+        } catch (e) {
+          console.error("Error parsing user data:", e);
+        }
+      }
+      
+      setCheckingAuth(false);
+    };
+
+    checkAuth();
+  }, [router]);
 
   const features = [
     {
@@ -50,6 +83,18 @@ export default function LandingPage() {
       description: "Manage member registrations, deposits, and financial records",
     },
   ];
+
+  // Show loading state while checking authentication
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-slate-600 dark:text-slate-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
