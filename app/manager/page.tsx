@@ -156,6 +156,31 @@ export default function ManagerDashboardPage() {
     }
   };
 
+  const clearExpenseMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiClient.post("/members/clear-expense");
+      if (!response.success) {
+        throw new Error(response.error || "Failed to clear total expense");
+      }
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["manager-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["members"] });
+      queryClient.invalidateQueries({ queryKey: ["heshab"] });
+      alert("Total expense cleared successfully for all members!");
+    },
+    onError: (error: Error) => {
+      alert(`Error: ${error.message}`);
+    },
+  });
+
+  const handleClearExpense = () => {
+    if (confirm("Are you sure you want to clear total expense for all members? This will reset total expense to 0 for everyone. This action cannot be undone!")) {
+      clearExpenseMutation.mutate();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden">
       {/* Animated background blobs */}
@@ -411,6 +436,14 @@ export default function ManagerDashboardPage() {
               <CardDescription className="text-sm sm:text-base text-gray-600">Common management tasks</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-2 sm:gap-3">
+              <Button
+                variant="outline"
+                onClick={handleClearExpense}
+                disabled={clearExpenseMutation.isPending}
+                className="bg-orange-50 hover:bg-orange-100 border-orange-300 text-orange-700 w-full"
+              >
+                {clearExpenseMutation.isPending ? "Clearing..." : "Clear Total Expense"}
+              </Button>
               <a href="/manager/heshab">
                 <Card className="p-3 sm:p-4 bg-white/60 backdrop-blur-md border-white/30 hover:bg-white/80 hover:shadow-md transition-all cursor-pointer">
                   <CardTitle className="text-base sm:text-lg text-gray-900">Heshab</CardTitle>

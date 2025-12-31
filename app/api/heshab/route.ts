@@ -345,9 +345,11 @@ export async function POST(request: NextRequest) {
       member.border = border;
       member.managerReceivable = due;
       member.totalDeposit = finalDeposit;
-      member.totalExpense = data.totalExpense;
+      // Don't update totalExpense when making a deposit - keep existing totalExpense
+      // member.totalExpense = data.totalExpense;
       member.perExtra = perExtra;
-      member.balanceDue = due;
+      // Recalculate balanceDue based on updated deposit and existing totalExpense
+      member.balanceDue = finalDeposit - member.totalExpense;
       await member.save();
     }
 
