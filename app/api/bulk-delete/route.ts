@@ -11,6 +11,7 @@ import {
   DailyExtraModel,
   DepositLogModel,
 } from "@/app/api/models";
+import { recalculatePerExtraForAllHeshab } from "@/lib/per-extra-calculator";
 
 // Map table names to their models
 const modelMap: Record<string, any> = {
@@ -52,6 +53,16 @@ export async function POST(request: NextRequest) {
     const deleteResult = await Model.deleteMany({
       _id: { $in: ids },
     });
+
+    // If members were deleted, recalculate perExtra for all heshab records
+    if (table === "members" && deleteResult.deletedCount > 0) {
+      try {
+        await recalculatePerExtraForAllHeshab();
+      } catch (recalcError: any) {
+        console.error("Error recalculating perExtra after member deletion:", recalcError);
+        // Don't fail the request if recalculation fails
+      }
+    }
 
     return NextResponse.json({
       success: true,

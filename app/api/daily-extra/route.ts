@@ -82,14 +82,134 @@ export async function POST(request: NextRequest) {
       addedBy,
     });
 
-    // Use full daily extra amount (not divided per member)
-    const extraAmount = data.amount;
+    // Get all members
+    const members = await MemberModel.find().lean();
+    const memberCount = members.length;
 
-    // Update all members: subtract full amount from totalDeposit only (totalExpense is manual)
+    // Update perExtra automatically in all heshab records (do NOT subtract from deposit)
+    // Get ALL daily extras (not filtered by month) for perExtra calculation
+    const allDailyExtras = await DailyExtraModel.find().lean();
+    const totalExtra = allDailyExtras.reduce((sum, extra) => sum + extra.amount, 0);
+    const updatedPerExtra = memberCount > 0 ? totalExtra / memberCount : 0;
+
+    // Update all members: only update perExtra, keep deposit unchanged
+    const memberUpdatePromises = members.map(async (member: any) => {
+      // Keep deposit and totalExpense unchanged, only update perExtra
+      const newTotalDeposit = member.totalDeposit; // Keep existing deposit
+      const newTotalExpense = member.totalExpense; // Keep existing totalExpense (manual)
+      const newBalanceDue = newTotalDeposit - (updatedPerExtra + newTotalExpense);
+      
+      // Calculate border and managerReceivable based on balance
+      let border = 0;
+      let managerReceivable = 0;
+      
+      if (newBalanceDue > 0) {
+        border = newBalanceDue;
+      } else if (newBalanceDue < 0) {
+        managerReceivable = Math.abs(newBalanceDue);
+      }
+
+      await MemberModel.findByIdAndUpdate(member._id, {
+        totalDeposit: newTotalDeposit, // Keep unchanged
+        totalExpense: newTotalExpense,
+        balanceDue: newBalanceDue,
+        border,
+        managerReceivable,
+        perExtra: updatedPerExtra, // Update perExtra only
+      });
+    });
+
+    // Update all heshab records: only update perExtra, keep deposit unchanged
+    const allHeshabRecords = await HeshabModel.find().lean();
+    const heshabUpdatePromises = allHeshabRecords.map(async (heshab: any) => {
+      // Keep deposit unchanged, only update perExtra
+      const newDeposit = heshab.deposit; // Keep existing deposit
+      const newTotalExpense = heshab.totalExpense; // Keep existing totalExpense (manual)
+      
+      // Update perExtra automatically (calculated from all daily extras)
+      const updatedPerExtra = memberCount > 0 ? totalExtra / memberCount : 0;
+      
+      // Recalculate balance: deposit - (perExtra + totalExpense)
+      const calculatedBalance = newDeposit - (updatedPerExtra + newTotalExpense);
+      
+      // Calculate border and managerReceivable
+      let border = 0;
+      let due = 0;
+      let currentBalance = calculatedBalance;
+      
+      if (calculatedBalance > 0) {
+        border = calculatedBalance;
+      } else if (calculatedBalance < 0) {
+        due = Math.abs(calculatedBalance);
+      }
+      
+      await HeshabModel.findByIdAndUpdate(heshab._id, {
+        deposit: newDeposit, // Keep unchanged
+        perExtra: updatedPerExtra, // Automatically calculated and updated
+        totalExpense: newTotalExpense,
+        currentBalance,
+        due,
+      });
+    });
+    
+    // Execute all updates in parallel
+    await Promise.all([...memberUpdatePromises, ...heshabUpdatePromises]);
+
+    return NextResponse.json({
+      success: true,
+      data: dailyExtra,
+      message: "Daily extra created successfully",
+    });
+  } catch (error: any) {
+    console.error("Create daily extra error:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Failed to create daily extra" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    await connectDB();
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: "Daily extra ID is required" },
+        { status: 400 }
+      );
+    }
+
+    // Find the daily extra to get its date and amount
+    const dailyExtra = await DailyExtraModel.findById(id);
+    if (!dailyExtra) {
+      return NextResponse.json(
+        { success: false, error: "Daily extra not found" },
+        { status: 404 }
+      );
+    }
+
+    const date = new Date(dailyExtra.date);
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    const extraAmount = dailyExtra.amount;
+
+    // Delete the daily extra
+    await DailyExtraModel.findByIdAndDelete(id);
+
+    // Recalculate perExtra: (TOTAL of ALL daily extras) / total members
+    const allDailyExtras = await DailyExtraModel.find().lean();
+    const totalExtra = allDailyExtras.reduce((sum, extra) => sum + extra.amount, 0);
+    const memberCount = await MemberModel.countDocuments();
+    const perExtra = memberCount > 0 ? totalExtra / memberCount : 0;
+
+    // Add back the extra amount to deposits (reverse the deduction)
     const members = await MemberModel.find().lean();
     const memberUpdatePromises = members.map(async (member: any) => {
-      // Subtract full daily extra amount from deposit only, keep totalExpense unchanged (manual)
-      const newTotalDeposit = Math.max(0, member.totalDeposit - extraAmount);
+      // Add back the daily extra amount to deposit
+      const newTotalDeposit = member.totalDeposit + extraAmount;
       const newTotalExpense = member.totalExpense; // Keep existing totalExpense (manual)
       const newBalanceDue = newTotalDeposit - newTotalExpense;
       
@@ -109,22 +229,26 @@ export async function POST(request: NextRequest) {
         balanceDue: newBalanceDue,
         border,
         managerReceivable,
+        perExtra,
       });
     });
 
-    // Update all heshab records: subtract from deposit only (perExtra is manual, not auto-calculated)
-    const date = new Date(data.date);
-    const month = date.getMonth() + 1;
-    const year = date.getFullYear();
-    const heshabRecords = await HeshabModel.find({ month, year }).lean();
-    const heshabUpdatePromises = heshabRecords.map(async (heshab: any) => {
-      // Subtract full daily extra amount from deposit only, keep perExtra and totalExpense unchanged (manual)
-      const newDeposit = Math.max(0, heshab.deposit - extraAmount);
-      const existingPerExtra = heshab.perExtra; // Keep existing perExtra (manual, not auto-calculated)
+    // Update ALL heshab records (not just this month): add back to deposit and update perExtra automatically
+    const allHeshabRecords = await HeshabModel.find().lean();
+    const heshabUpdatePromises = allHeshabRecords.map(async (heshab: any) => {
+      // Only add back deposit if this heshab record is for the same month as the deleted extra
+      const heshabDate = new Date(heshab.year, heshab.month - 1, 1);
+      const deletedDate = new Date(year, month - 1, 1);
+      const isSameMonth = heshabDate.getTime() === deletedDate.getTime();
+      
+      const newDeposit = isSameMonth ? heshab.deposit + extraAmount : heshab.deposit;
       const newTotalExpense = heshab.totalExpense; // Keep existing totalExpense (manual)
       
-      // Recalculate balance: (deposit + perExtra) - totalExpense
-      const calculatedBalance = newDeposit + existingPerExtra - newTotalExpense;
+      // Update perExtra automatically (calculated from all daily extras)
+      const updatedPerExtra = perExtra;
+      
+      // Recalculate balance: deposit - (perExtra + totalExpense)
+      const calculatedBalance = newDeposit - (updatedPerExtra + newTotalExpense);
       
       // Calculate border and managerReceivable
       let border = 0;
@@ -139,7 +263,7 @@ export async function POST(request: NextRequest) {
       
       await HeshabModel.findByIdAndUpdate(heshab._id, {
         deposit: newDeposit,
-        // perExtra is not updated - it remains manual
+        perExtra: updatedPerExtra, // Automatically calculated and updated
         totalExpense: newTotalExpense,
         currentBalance,
         due,
@@ -151,13 +275,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: dailyExtra,
-      message: "Daily extra created successfully",
+      message: "Daily extra deleted successfully",
     });
   } catch (error: any) {
-    console.error("Create daily extra error:", error);
+    console.error("Delete daily extra error:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to create daily extra" },
+      { success: false, error: error.message || "Failed to delete daily extra" },
       { status: 500 }
     );
   }

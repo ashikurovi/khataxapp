@@ -4,6 +4,7 @@ import connectDB from "@/lib/db";
 import HeshabModel from "@/app/api/models/Heshab";
 import MemberModel from "@/app/api/models/Member";
 import DailyExtraModel from "@/app/api/models/DailyExtra";
+import DailyExpenseModel from "@/app/api/models/DailyExpense";
 import DepositLogModel from "@/app/api/models/DepositLog";
 import { EmailService } from "@/lib/email";
 import { PDFGenerator } from "@/lib/pdf-generator";
@@ -21,7 +22,58 @@ export async function GET(request: NextRequest) {
 
     const heshabRecords = await HeshabModel.find(query).populate("userId").lean();
 
-    const heshabWithUser: HeshabWithUser[] = heshabRecords.map((heshab: any) => ({
+    // Calculate perExtra for each unique month/year combination
+    const uniqueMonths = new Set(
+      heshabRecords.map((h: any) => `${h.year}-${h.month}`)
+    );
+
+    // Calculate perExtra: (TOTAL of ALL daily extras) / total members
+    // This is the same for all months - total daily extras divided by total members
+    const memberCount = await MemberModel.countDocuments();
+    
+    // Get ALL daily extras (not filtered by month)
+    const allDailyExtras = await DailyExtraModel.find().lean();
+    const totalExtra = allDailyExtras.reduce((sum, extra) => sum + extra.amount, 0);
+    const perExtra = memberCount > 0 ? totalExtra / memberCount : 0;
+    
+    // Use the same perExtra for all months
+    const perExtraMap = new Map<string, number>();
+    for (const monthKey of uniqueMonths) {
+      perExtraMap.set(monthKey, perExtra);
+    }
+
+    // Update all heshab records with calculated perExtra and recalculate balance
+    const updatePromises = heshabRecords.map(async (heshab: any) => {
+      const monthKey = `${heshab.year}-${heshab.month}`;
+      const calculatedPerExtra = perExtraMap.get(monthKey) || 0;
+      
+      // Recalculate balance: deposit - (perExtra + totalExpense)
+      const calculatedBalance = heshab.deposit - (calculatedPerExtra + heshab.totalExpense);
+      
+      // Calculate border and due
+      let border = 0;
+      let due = 0;
+      
+      if (calculatedBalance > 0) {
+        border = calculatedBalance;
+      } else if (calculatedBalance < 0) {
+        due = Math.abs(calculatedBalance);
+      }
+
+      // Update the record in database
+      await HeshabModel.findByIdAndUpdate(heshab._id, {
+        perExtra: calculatedPerExtra,
+        currentBalance: calculatedBalance,
+        due,
+      });
+    });
+
+    await Promise.all(updatePromises);
+
+    // Fetch updated records
+    const updatedHeshabRecords = await HeshabModel.find(query).populate("userId").lean();
+
+    const heshabWithUser: HeshabWithUser[] = updatedHeshabRecords.map((heshab: any) => ({
       id: heshab._id.toString(),
       userId: heshab.userId._id.toString(),
       deposit: heshab.deposit,
@@ -67,8 +119,33 @@ export async function POST(request: NextRequest) {
     await connectDB();
     const data = await request.json();
 
-    // perExtra is manual - use provided value or default to 0
-    const perExtra = data.perExtra !== undefined ? data.perExtra : 0;
+    // Calculate perExtra: (TOTAL of ALL daily extras) / total members
+    // Get ALL daily extras (not filtered by month)
+    const allDailyExtras = await DailyExtraModel.find().lean();
+    const totalExtra = allDailyExtras.reduce((sum, extra) => sum + extra.amount, 0);
+    
+    // Get all members count
+    const memberCount = await MemberModel.countDocuments();
+    const perExtra = memberCount > 0 ? totalExtra / memberCount : 0;
+
+    // Use manual totalExpense if provided, otherwise calculate from approved expenses
+    let totalExpense = data.totalExpense;
+    if (totalExpense === undefined || totalExpense === null) {
+      const approvedExpenses = await DailyExpenseModel.find({
+        approved: true,
+        date: {
+          $gte: new Date(data.year, data.month - 1, 1),
+          $lt: new Date(data.year, data.month, 1),
+        },
+      }).lean();
+      
+      const totalApprovedExpenseAmount = approvedExpenses.reduce(
+        (sum, exp: any) => sum + exp.totalTK + exp.extra,
+        0
+      );
+      // totalExpense = sum of approved expenses only (perExtra is separate)
+      totalExpense = totalApprovedExpenseAmount;
+    }
 
     // Get existing heshab record if it exists
     const existingHeshab = await HeshabModel.findOne({
@@ -109,73 +186,37 @@ export async function POST(request: NextRequest) {
       finalDeposit = existingHeshab.deposit + remainingDeposit;
     }
 
-    // Calculate balance: (deposit + perExtra) - totalExpense
-    const calculatedBalance = finalDeposit + perExtra - data.totalExpense;
+    // Calculate balance: deposit - (perExtra + totalExpense)
+    const calculatedBalance = finalDeposit - (perExtra + totalExpense);
     
-    // Calculate remaining receivable after payment from deposit
-    // This is the receivable that remains after the deposit payment
-    // IMPORTANT: This should always be shown if it exists, regardless of balance
-    let remainingReceivable = 0;
-    if (existingHeshab && existingHeshab.due) {
-      remainingReceivable = Math.max(0, existingHeshab.due - paidToReceivable);
-    }
-    
-    // Calculate border and managerReceivable based on the formula
-    // The remaining receivable after deposit payment should always be preserved and shown
-    // The balance calculation is separate and only affects additional receivable or border
-    let border = 0;
-    let due = remainingReceivable; // Always preserve remaining receivable after payment
+    // Use manual border/managerReceivable if provided, otherwise auto-calculate from balance
+    let border = data.border;
+    let due = data.managerReceivable;
     let currentBalance = calculatedBalance;
     
-    // The balance calculation is separate from the remaining receivable
-    // If balance is positive, it goes to border (but remaining receivable stays)
-    // If balance is negative, it adds to the remaining receivable
-    // Only if balance is positive AND greater than remaining receivable, it clears the receivable
-    if (calculatedBalance > 0) {
-      // Positive balance: goes to border
-      // Check if it can cover remaining receivable
-      if (calculatedBalance > remainingReceivable) {
-        // Positive balance is more than remaining receivable
-        // Remaining receivable is cleared, excess goes to border
-        border = calculatedBalance - remainingReceivable;
-        due = 0; // All receivable cleared by positive balance
-        currentBalance = calculatedBalance;
+    if (border === undefined && due === undefined) {
+      // Auto-calculate from balance if not provided
+      if (calculatedBalance > 0) {
+        border = calculatedBalance;
+        due = 0;
+      } else if (calculatedBalance < 0) {
+        border = 0;
+        due = Math.abs(calculatedBalance);
       } else {
-        // Positive balance but less than or equal to remaining receivable
-        // Show the remaining receivable (positive balance doesn't fully cover it)
-        due = remainingReceivable;
-        border = 0; // No border, receivable still exists
-        currentBalance = calculatedBalance - remainingReceivable; // Effective balance is negative
+        border = 0;
+        due = 0;
       }
-    } else if (calculatedBalance < 0) {
-      // Negative balance: adds to remaining receivable
-      due = remainingReceivable + Math.abs(calculatedBalance);
-      currentBalance = calculatedBalance;
-      border = 0; // Clear border when balance is negative
     } else {
-      // Balance is exactly 0
-      // Show the remaining receivable as is (if any)
-      due = remainingReceivable;
-      border = 0;
-      currentBalance = 0;
-    }
-    
-    // If manually provided, override the calculated values
-    if (data.border !== undefined && data.border >= 0) {
-      border = data.border;
-      // Adjust currentBalance if border is manually set
-      if (border > 0) {
-        currentBalance = border;
-        // Don't clear due if manually setting border - preserve remaining receivable
-        // due = 0; // Removed - preserve remaining receivable
-      }
-    }
-    
-    if (data.managerReceivable !== undefined && data.managerReceivable >= 0) {
-      due = data.managerReceivable;
-      // Adjust currentBalance if managerReceivable is manually set
-      if (due > 0) {
-        currentBalance = -due;
+      // Use manual values if provided
+      if (border === undefined) border = 0;
+      if (due === undefined) due = 0;
+      
+      // If manual values provided, adjust currentBalance accordingly
+      if (data.border !== undefined && data.border >= 0) {
+        currentBalance = data.border;
+        due = 0;
+      } else if (data.managerReceivable !== undefined && data.managerReceivable >= 0) {
+        currentBalance = -data.managerReceivable;
         border = 0;
       }
     }
@@ -188,7 +229,7 @@ export async function POST(request: NextRequest) {
         deposit: finalDeposit,
         previousBalance: 0, // Set to 0 since we're removing it
         perExtra,
-        totalExpense: data.totalExpense,
+        totalExpense: totalExpense,
         currentBalance,
         due,
         month: data.month,
@@ -315,7 +356,7 @@ export async function POST(request: NextRequest) {
           deposit: finalDeposit,
           previousBalance: existingHeshab ? existingHeshab.due || 0 : 0,
           perExtra,
-          totalExpense: data.totalExpense,
+          totalExpense: totalExpense,
           currentBalance,
           pdfBuffer: Buffer.from(pdfBuffer),
           todayDeposit: todayDeposit,
@@ -334,11 +375,10 @@ export async function POST(request: NextRequest) {
       member.border = border;
       member.managerReceivable = due;
       member.totalDeposit = finalDeposit;
-      // Don't update totalExpense when making a deposit - keep existing totalExpense
-      // member.totalExpense = data.totalExpense;
+      member.totalExpense = totalExpense; // Update with calculated totalExpense
       member.perExtra = perExtra;
-      // Recalculate balanceDue based on updated deposit and existing totalExpense
-      member.balanceDue = finalDeposit - member.totalExpense;
+      // Recalculate balanceDue: deposit - (perExtra + totalExpense)
+      member.balanceDue = currentBalance;
       await member.save();
     }
 
@@ -356,8 +396,8 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT endpoint to update heshab record fields
-export async function PUT(request: NextRequest) {
+// PATCH endpoint to update heshab record fields
+export async function PATCH(request: NextRequest) {
   try {
     await connectDB();
     const data = await request.json();
@@ -386,44 +426,69 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Use provided values or keep existing values
+    // Use provided deposit value directly (REPLACE, not add)
+    // If deposit is provided, use it as the new deposit amount (not added to existing)
     const updatedDeposit = deposit !== undefined ? deposit : existingHeshab.deposit;
     
-    // perExtra is manual - use provided value or keep existing
-    const updatedPerExtra = perExtra !== undefined ? perExtra : existingHeshab.perExtra;
+    // Always calculate perExtra: (TOTAL of ALL daily extras) / total members
+    // Get ALL daily extras (not filtered by month)
+    const allDailyExtras = await DailyExtraModel.find().lean();
+    const totalExtra = allDailyExtras.reduce((sum, extra) => sum + extra.amount, 0);
+    const memberCount = await MemberModel.countDocuments();
+    const updatedPerExtra = memberCount > 0 ? totalExtra / memberCount : 0;
 
-    const updatedTotalExpense = totalExpense !== undefined ? totalExpense : existingHeshab.totalExpense;
+    // Use manual totalExpense if provided, otherwise keep existing or calculate from approved expenses
+    let updatedTotalExpense = totalExpense;
+    if (updatedTotalExpense === undefined || updatedTotalExpense === null) {
+      // If not provided, use existing value or calculate from approved expenses
+      const approvedExpenses = await DailyExpenseModel.find({
+        approved: true,
+        date: {
+          $gte: new Date(existingHeshab.year, existingHeshab.month - 1, 1),
+          $lt: new Date(existingHeshab.year, existingHeshab.month, 1),
+        },
+      }).lean();
+      
+      const totalApprovedExpenseAmount = approvedExpenses.reduce(
+        (sum, exp: any) => sum + exp.totalTK + exp.extra,
+        0
+      );
+      // Use calculated value or keep existing
+      updatedTotalExpense = totalApprovedExpenseAmount > 0 ? totalApprovedExpenseAmount : existingHeshab.totalExpense;
+    }
 
-    // Calculate balance: (deposit + perExtra) - totalExpense
-    const calculatedBalance = updatedDeposit + updatedPerExtra - updatedTotalExpense;
+    // Calculate balance: deposit - (perExtra + totalExpense)
+    const calculatedBalance = updatedDeposit - (updatedPerExtra + updatedTotalExpense);
     
-    // Use provided border/managerReceivable or calculate from balance
+    // Use manual border/managerReceivable if provided, otherwise auto-calculate from balance
     let updatedBorder = border;
     let updatedDue = managerReceivable;
     let currentBalance = calculatedBalance;
     
-    if (updatedBorder !== undefined && updatedBorder >= 0) {
-      // Border is manually set
-      currentBalance = updatedBorder;
-      updatedDue = 0;
-    } else if (updatedDue !== undefined && updatedDue >= 0) {
-      // Manager receivable is manually set
-      currentBalance = -updatedDue;
-      updatedBorder = 0;
-    } else {
-      // Calculate from balance
+    if (updatedBorder === undefined && updatedDue === undefined) {
+      // Auto-calculate from balance if not provided
       if (calculatedBalance > 0) {
         updatedBorder = calculatedBalance;
         updatedDue = 0;
-        currentBalance = calculatedBalance;
       } else if (calculatedBalance < 0) {
-        updatedDue = Math.abs(calculatedBalance);
         updatedBorder = 0;
-        currentBalance = calculatedBalance;
+        updatedDue = Math.abs(calculatedBalance);
       } else {
         updatedBorder = 0;
         updatedDue = 0;
-        currentBalance = 0;
+      }
+    } else {
+      // Use manual values if provided
+      if (updatedBorder === undefined) updatedBorder = 0;
+      if (updatedDue === undefined) updatedDue = 0;
+      
+      // If manual values provided, adjust currentBalance accordingly
+      if (border !== undefined && border >= 0) {
+        currentBalance = border;
+        updatedDue = 0;
+      } else if (managerReceivable !== undefined && managerReceivable >= 0) {
+        currentBalance = -managerReceivable;
+        updatedBorder = 0;
       }
     }
 
@@ -443,11 +508,13 @@ export async function PUT(request: NextRequest) {
     // Update Member model
     const member = await MemberModel.findOne({ userId: existingHeshab.userId });
     if (member) {
+      // Update totalDeposit to match the heshab deposit (replace, not add)
+      member.totalDeposit = updatedDeposit;
       member.border = updatedBorder;
       member.managerReceivable = updatedDue;
       member.totalExpense = updatedTotalExpense;
       member.perExtra = updatedPerExtra;
-      member.balanceDue = updatedDue;
+      member.balanceDue = currentBalance; // Use calculated balance
       await member.save();
     }
 

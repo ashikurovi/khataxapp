@@ -44,9 +44,31 @@ export default function DailyExtraPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["daily-extra"] });
       queryClient.invalidateQueries({ queryKey: ["heshab"] });
+      queryClient.invalidateQueries({ queryKey: ["members"] });
       setDialogOpen(false);
     },
   });
+
+  const { mutate: deleteDailyExtra, isPending: isDeleting } = useMutation({
+    mutationFn: async (id: string) => {
+      return apiClient.delete(`/daily-extra?id=${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["daily-extra"] });
+      queryClient.invalidateQueries({ queryKey: ["heshab"] });
+      queryClient.invalidateQueries({ queryKey: ["members"] });
+      alert("Daily extra deleted successfully");
+    },
+    onError: (error: Error) => {
+      alert(`Error: ${error.message}`);
+    },
+  });
+
+  const handleDelete = (id: string) => {
+    if (confirm("Are you sure you want to delete this daily extra? This will update all heshab records.")) {
+      deleteDailyExtra(id);
+    }
+  };
 
   const {
     register,
@@ -137,7 +159,11 @@ export default function DailyExtraPage() {
             {isLoading ? (
               <p className="text-gray-600">Loading...</p>
             ) : (
-              <DailyExtraTable dailyExtras={dailyExtras || []} />
+              <DailyExtraTable 
+                dailyExtras={dailyExtras || []} 
+                onDelete={handleDelete}
+                showActions={true}
+              />
             )}
           </CardContent>
         </Card>

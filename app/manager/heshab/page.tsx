@@ -16,14 +16,13 @@ import { z } from "zod";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Combobox } from "@/components/ui/combobox";
+import { ReactSelect, ReactSelectOption } from "@/components/ui/react-select";
 
 const heshabSchema = z.object({
   userId: z.string().min(1, "Member is required"),
   deposit: z.number().min(0),
   month: z.number().min(1).max(12),
   year: z.number().min(2020),
-  perExtra: z.number().min(0).optional(),
   totalExpense: z.number().min(0),
   border: z.number().min(0).optional(),
   managerReceivable: z.number().min(0).optional(),
@@ -79,7 +78,7 @@ export default function HeshabPage() {
 
   const { mutate: updateExpense, isPending: isUpdatingExpense } = useMutation({
     mutationFn: async (data: { heshabId: string; totalExpense: number }) => {
-      return apiClient.put("/heshab", data);
+      return apiClient.patch("/heshab", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["heshab"] });
@@ -99,7 +98,7 @@ export default function HeshabPage() {
       border?: number;
       managerReceivable?: number;
     }) => {
-      return apiClient.put("/heshab", data);
+      return apiClient.patch("/heshab", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["heshab"] });
@@ -133,15 +132,15 @@ export default function HeshabPage() {
     setValue,
     watch,
   } = useForm<HeshabForm>({
+    mode: "onChange",
     resolver: zodResolver(heshabSchema),
     defaultValues: {
       month: new Date().getMonth() + 1,
       year: new Date().getFullYear(),
       deposit: 0,
-      perExtra: 0,
-      totalExpense: 0,
-      border: 0,
-      managerReceivable: 0,
+      totalExpense: 0, // Will be auto-calculated from approved expenses
+      border: 0, // Will be auto-calculated
+      managerReceivable: 0, // Will be auto-calculated
     },
   });
 
@@ -195,23 +194,42 @@ export default function HeshabPage() {
           </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <div className="flex gap-2">
-              <Input
-                type="number"
-                min="1"
-                max="12"
-                value={month}
-                onChange={(e) => setMonth(Number(e.target.value))}
-                className="w-20 bg-white/80 backdrop-blur-md border-white/30"
+              <ReactSelect
+                options={[
+                  { value: 1, label: "January" },
+                  { value: 2, label: "February" },
+                  { value: 3, label: "March" },
+                  { value: 4, label: "April" },
+                  { value: 5, label: "May" },
+                  { value: 6, label: "June" },
+                  { value: 7, label: "July" },
+                  { value: 8, label: "August" },
+                  { value: 9, label: "September" },
+                  { value: 10, label: "October" },
+                  { value: 11, label: "November" },
+                  { value: 12, label: "December" },
+                ]}
+                value={{
+                  value: month,
+                  label: new Date(2000, month - 1, 1).toLocaleString("default", {
+                    month: "long",
+                  }),
+                }}
+                onChange={(option) => setMonth((option?.value as number) || 1)}
                 placeholder="Month"
+                isSearchable={false}
+                className="w-32"
               />
-              <Input
-                type="number"
-                min="2020"
-                max="2100"
-                value={year}
-                onChange={(e) => setYear(Number(e.target.value))}
-                className="w-24 bg-white/80 backdrop-blur-md border-white/30"
+              <ReactSelect
+                options={Array.from({ length: 15 }, (_, i) => {
+                  const yearVal = 2020 + i;
+                  return { value: yearVal, label: yearVal.toString() };
+                })}
+                value={{ value: year, label: year.toString() }}
+                onChange={(option) => setYear((option?.value as number) || new Date().getFullYear())}
                 placeholder="Year"
+                isSearchable={false}
+                className="w-28"
               />
             </div>
             <Button
@@ -281,18 +299,28 @@ export default function HeshabPage() {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 sm:space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="userId">Member</Label>
-                <Combobox
+                <ReactSelect
                   options={
                     members?.map((member) => ({
                       value: member.userId,
                       label: member.user.name,
                     })) || []
                   }
-                  value={selectedUserId || ""}
-                  onValueChange={(value) => setValue("userId", value)}
+                  value={
+                    selectedUserId
+                      ? {
+                          value: selectedUserId,
+                          label:
+                            members?.find((m) => m.userId === selectedUserId)?.user.name ||
+                            "Select a member",
+                        }
+                      : null
+                  }
+                  onChange={(option) => {
+                    setValue("userId", option?.value as string || "", { shouldValidate: true });
+                  }}
                   placeholder="Select a member"
-                  searchPlaceholder="Search members..."
-                  emptyMessage="No member found."
+                  isSearchable={true}
                 />
                 {errors.userId && (
                   <p className="text-sm text-destructive">{errors.userId.message}</p>
@@ -302,12 +330,36 @@ export default function HeshabPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="month">Month</Label>
-                  <Input
-                    id="month"
-                    type="number"
-                    min="1"
-                    max="12"
-                    {...register("month", { valueAsNumber: true })}
+                  <ReactSelect
+                    options={[
+                      { value: 1, label: "January" },
+                      { value: 2, label: "February" },
+                      { value: 3, label: "March" },
+                      { value: 4, label: "April" },
+                      { value: 5, label: "May" },
+                      { value: 6, label: "June" },
+                      { value: 7, label: "July" },
+                      { value: 8, label: "August" },
+                      { value: 9, label: "September" },
+                      { value: 10, label: "October" },
+                      { value: 11, label: "November" },
+                      { value: 12, label: "December" },
+                    ]}
+                    value={
+                      watch("month")
+                        ? {
+                            value: watch("month"),
+                            label: new Date(2000, watch("month") - 1, 1).toLocaleString("default", {
+                              month: "long",
+                            }),
+                          }
+                        : null
+                    }
+                    onChange={(option) => {
+                      setValue("month", (option?.value as number) || 1, { shouldValidate: true });
+                    }}
+                    placeholder="Select Month"
+                    isSearchable={false}
                   />
                   {errors.month && (
                     <p className="text-sm text-destructive">{errors.month.message}</p>
@@ -316,12 +368,26 @@ export default function HeshabPage() {
 
                 <div className="space-y-2">
                   <Label htmlFor="year">Year</Label>
-                  <Input
-                    id="year"
-                    type="number"
-                    min="2020"
-                    max="2100"
-                    {...register("year", { valueAsNumber: true })}
+                  <ReactSelect
+                    options={Array.from({ length: 15 }, (_, i) => {
+                      const year = 2020 + i;
+                      return { value: year, label: year.toString() };
+                    })}
+                    value={
+                      watch("year")
+                        ? {
+                            value: watch("year"),
+                            label: watch("year").toString(),
+                          }
+                        : null
+                    }
+                    onChange={(option) => {
+                      setValue("year", (option?.value as number) || new Date().getFullYear(), {
+                        shouldValidate: true,
+                      });
+                    }}
+                    placeholder="Select Year"
+                    isSearchable={false}
                   />
                   {errors.year && (
                     <p className="text-sm text-destructive">{errors.year.message}</p>
@@ -347,23 +413,6 @@ export default function HeshabPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="perExtra">Per Extra</Label>
-                <Input
-                  id="perExtra"
-                  type="number"
-                  step="0.01"
-                  placeholder="Per extra amount"
-                  {...register("perExtra", { valueAsNumber: true })}
-                />
-                <p className="text-xs text-gray-500">
-                  Per extra amount (manual entry)
-                </p>
-                {errors.perExtra && (
-                  <p className="text-sm text-destructive">{errors.perExtra.message}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
                 <Label htmlFor="totalExpense">Total Expense</Label>
                 <Input
                   id="totalExpense"
@@ -371,6 +420,9 @@ export default function HeshabPage() {
                   step="0.01"
                   {...register("totalExpense", { valueAsNumber: true })}
                 />
+                <p className="text-xs text-gray-500">
+                  Enter total expense manually (perExtra is automatically calculated from daily extras)
+                </p>
                 {errors.totalExpense && (
                   <p className="text-sm text-destructive">{errors.totalExpense.message}</p>
                 )}
@@ -386,6 +438,9 @@ export default function HeshabPage() {
                     placeholder="Refundable amount"
                     {...register("border", { valueAsNumber: true })}
                   />
+                  <p className="text-xs text-gray-500">
+                    Enter manually or leave empty to auto-calculate: deposit - (perExtra + totalExpense) if positive
+                  </p>
                   {errors.border && (
                     <p className="text-sm text-destructive">{errors.border.message}</p>
                   )}
@@ -400,6 +455,9 @@ export default function HeshabPage() {
                     placeholder="Amount owed"
                     {...register("managerReceivable", { valueAsNumber: true })}
                   />
+                  <p className="text-xs text-gray-500">
+                    Enter manually or leave empty to auto-calculate: (perExtra + totalExpense) - deposit if negative
+                  </p>
                   {errors.managerReceivable && (
                     <p className="text-sm text-destructive">{errors.managerReceivable.message}</p>
                   )}

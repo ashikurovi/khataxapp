@@ -31,6 +31,8 @@ interface HeshabTableProps {
 
 export function HeshabTable({ heshabRecords, showFooter = true, onUpdate, onUpdateExpense }: HeshabTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingDepositId, setEditingDepositId] = useState<string | null>(null);
+  const [depositValue, setDepositValue] = useState<number>(0);
   const [editValues, setEditValues] = useState<{
     deposit: number;
     perExtra: number;
@@ -49,10 +51,10 @@ export function HeshabTable({ heshabRecords, showFooter = true, onUpdate, onUpda
     setEditingId(heshab.id);
     setEditValues({
       deposit: heshab.deposit,
-      perExtra: heshab.perExtra,
-      totalExpense: heshab.totalExpense,
-      border: heshab.currentBalance > 0 ? heshab.currentBalance : 0,
-      managerReceivable: heshab.due,
+      perExtra: heshab.perExtra, // Not editable but kept for display
+      totalExpense: heshab.totalExpense, // Not editable but kept for display
+      border: heshab.currentBalance > 0 ? heshab.currentBalance : 0, // Not editable but kept for display
+      managerReceivable: heshab.due, // Not editable but kept for display
     });
   };
 
@@ -63,7 +65,14 @@ export function HeshabTable({ heshabRecords, showFooter = true, onUpdate, onUpda
 
   const handleSave = (heshabId: string) => {
     if (editValues && onUpdate) {
-      onUpdate(heshabId, editValues);
+      // Send deposit, totalExpense, border, and managerReceivable (all editable)
+      // perExtra is auto-calculated
+      onUpdate(heshabId, {
+        deposit: editValues.deposit,
+        totalExpense: editValues.totalExpense,
+        border: editValues.border,
+        managerReceivable: editValues.managerReceivable,
+      });
       setEditingId(null);
       setEditValues(null);
     }
@@ -76,6 +85,26 @@ export function HeshabTable({ heshabRecords, showFooter = true, onUpdate, onUpda
         [field]: parseFloat(value) || 0,
       });
     }
+  };
+
+  const handleDepositEdit = (heshab: HeshabWithUser) => {
+    setEditingDepositId(heshab.id);
+    setDepositValue(heshab.deposit);
+  };
+
+  const handleDepositSave = (heshabId: string) => {
+    if (onUpdate && depositValue >= 0) {
+      onUpdate(heshabId, {
+        deposit: depositValue,
+      });
+      setEditingDepositId(null);
+      setDepositValue(0);
+    }
+  };
+
+  const handleDepositCancel = () => {
+    setEditingDepositId(null);
+    setDepositValue(0);
   };
 
   return (
@@ -96,35 +125,63 @@ export function HeshabTable({ heshabRecords, showFooter = true, onUpdate, onUpda
         <TableBody>
           {heshabRecords.map((heshab, index) => {
             const isEditing = editingId === heshab.id;
+            const hasPositiveBalance = heshab.currentBalance > 0;
+            const hasNegativeBalance = heshab.due > 0;
             return (
-              <TableRow key={heshab.id}>
+              <TableRow 
+                key={heshab.id}
+                className={hasPositiveBalance ? "border-l-4 border-l-green-500" : hasNegativeBalance ? "border-l-4 border-l-red-500" : ""}
+              >
                 <TableCell className="font-medium">{index + 1}</TableCell>
                 <TableCell className="font-medium">{heshab.user.name}</TableCell>
                 <TableCell>
-                  {isEditing && editValues ? (
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={editValues.deposit}
-                      onChange={(e) => handleInputChange("deposit", e.target.value)}
-                      className="w-24 h-8"
-                    />
+                  {editingDepositId === heshab.id ? (
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={depositValue}
+                        onChange={(e) => setDepositValue(parseFloat(e.target.value) || 0)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            handleDepositSave(heshab.id);
+                          } else if (e.key === "Escape") {
+                            handleDepositCancel();
+                          }
+                        }}
+                        className="w-24 h-8"
+                        autoFocus
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDepositSave(heshab.id)}
+                        className="h-7 w-7 p-0"
+                      >
+                        <Check className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleDepositCancel}
+                        className="h-7 w-7 p-0"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
                   ) : (
-                    `TK ${heshab.deposit.toFixed(2)}`
+                    <span
+                      onClick={() => handleDepositEdit(heshab)}
+                      className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded transition-colors"
+                      title="Click to edit deposit"
+                    >
+                      TK {heshab.deposit.toFixed(2)}
+                    </span>
                   )}
                 </TableCell>
                 <TableCell>
-                  {isEditing && editValues ? (
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={editValues.perExtra}
-                      onChange={(e) => handleInputChange("perExtra", e.target.value)}
-                      className="w-24 h-8"
-                    />
-                  ) : (
-                    `TK ${heshab.perExtra.toFixed(2)}`
-                  )}
+                  <span className="text-gray-600">TK {heshab.perExtra.toFixed(2)}</span>
+                  <span className="text-xs text-gray-400 ml-1">(auto)</span>
                 </TableCell>
                 <TableCell>
                   {isEditing && editValues ? (
@@ -149,7 +206,7 @@ export function HeshabTable({ heshabRecords, showFooter = true, onUpdate, onUpda
                       className="w-24 h-8"
                     />
                   ) : heshab.currentBalance > 0 ? (
-                    <Badge variant="secondary">
+                    <Badge variant="secondary" className="border-2 border-green-500 bg-green-50 text-green-700">
                       TK {heshab.currentBalance.toFixed(2)}
                     </Badge>
                   ) : (
@@ -166,7 +223,7 @@ export function HeshabTable({ heshabRecords, showFooter = true, onUpdate, onUpda
                       className="w-24 h-8"
                     />
                   ) : heshab.due > 0 ? (
-                    <Badge variant="destructive">
+                    <Badge variant="destructive" className="border-2 border-red-500">
                       TK {heshab.due.toFixed(2)}
                     </Badge>
                   ) : (

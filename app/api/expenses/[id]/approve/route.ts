@@ -3,6 +3,7 @@ import connectDB from "@/lib/db";
 import DailyExpenseModel from "@/app/api/models/DailyExpense";
 import MemberModel from "@/app/api/models/Member";
 import HeshabModel from "@/app/api/models/Heshab";
+import DailyExtraModel from "@/app/api/models/DailyExtra";
 
 export async function PATCH(
   request: NextRequest,
@@ -34,23 +35,49 @@ export async function PATCH(
     expense.approved = true;
     await expense.save();
 
-    // Calculate total expense amount (totalTK + extra)
-    const totalExpenseAmount = expense.totalTK + expense.extra;
+    // Get expense date and month/year
+    const expenseDate = new Date(expense.date);
+    const expenseMonth = expenseDate.getMonth() + 1; // getMonth() returns 0-11
+    const expenseYear = expenseDate.getFullYear();
+
+    // Calculate perExtra: (TOTAL of ALL daily extras) / total members
+    // Get ALL daily extras (not filtered by month)
+    const allDailyExtras = await DailyExtraModel.find().lean();
+    const totalExtra = allDailyExtras.reduce((sum, extra) => sum + extra.amount, 0);
+    const memberCount = await MemberModel.countDocuments();
+    const perExtra = memberCount > 0 ? totalExtra / memberCount : 0;
+
+    // Get all approved expenses for this month (including the one just approved)
+    const approvedExpenses = await DailyExpenseModel.find({
+      approved: true,
+      date: {
+        $gte: new Date(expenseYear, expenseMonth - 1, 1),
+        $lt: new Date(expenseYear, expenseMonth, 1),
+      },
+    }).lean();
+
+    // Calculate total expense: sum of all approved expenses (NOT including perExtra)
+    const totalApprovedExpenseAmount = approvedExpenses.reduce(
+      (sum, exp: any) => sum + exp.totalTK + exp.extra,
+      0
+    );
+    const totalExpense = totalApprovedExpenseAmount; // Only approved expenses, perExtra is separate
+
+    // Calculate expense amount for deposit deduction (totalTK + extra)
+    const expenseAmount = expense.totalTK + expense.extra;
 
     // Get all members
     const members = await MemberModel.find().lean();
-    const memberCount = members.length;
     
-    if (memberCount > 0) {
-      // Use full expense amount (not divided per member)
-      const expenseAmount = totalExpenseAmount;
-
-      // Update all members: subtract from deposit only (totalExpense is manual)
-      const updatePromises = members.map(async (member: any) => {
-        // Subtract expense amount from deposit only, keep totalExpense unchanged (manual)
+    if (members.length > 0) {
+      // Update all members: subtract from deposit and add to totalExpense
+      const memberUpdatePromises = members.map(async (member: any) => {
+        // Subtract expense amount from deposit
         const newTotalDeposit = Math.max(0, member.totalDeposit - expenseAmount);
-        const newTotalExpense = member.totalExpense; // Keep existing totalExpense (manual)
-        const newBalanceDue = newTotalDeposit - newTotalExpense;
+        // Add expense amount to totalExpense (manual totalExpense + new expense)
+        const newTotalExpense = member.totalExpense + expenseAmount;
+        // Calculate balance: deposit - (perExtra + totalExpense)
+        const newBalanceDue = newTotalDeposit - (perExtra + newTotalExpense);
         
         // Calculate border and managerReceivable based on balance
         let border = 0;
@@ -68,29 +95,26 @@ export async function PATCH(
           balanceDue: newBalanceDue,
           border,
           managerReceivable,
+          perExtra,
         });
       });
 
-      await Promise.all(updatePromises);
+      await Promise.all(memberUpdatePromises);
 
       // Update Heshab records for the expense month/year
-      const expenseDate = new Date(expense.date);
-      const expenseMonth = expenseDate.getMonth() + 1; // getMonth() returns 0-11
-      const expenseYear = expenseDate.getFullYear();
-
-      // Update all Heshab records for this month/year
       const heshabRecords = await HeshabModel.find({
         month: expenseMonth,
         year: expenseYear,
       }).lean();
 
       const heshabUpdatePromises = heshabRecords.map(async (heshab: any) => {
-        // Subtract expense amount from deposit only, keep totalExpense unchanged (manual)
+        // Subtract expense amount from deposit
         const newDeposit = Math.max(0, heshab.deposit - expenseAmount);
-        const newTotalExpense = heshab.totalExpense; // Keep existing totalExpense (manual)
+        // Add expense amount to totalExpense (manual totalExpense + new expense)
+        const newTotalExpense = heshab.totalExpense + expenseAmount;
         
-        // Recalculate balance: (deposit + perExtra) - totalExpense
-        const calculatedBalance = newDeposit + heshab.perExtra - newTotalExpense;
+        // Recalculate balance: deposit - (perExtra + totalExpense)
+        const calculatedBalance = newDeposit - (perExtra + newTotalExpense);
         
         // Calculate border and managerReceivable
         let border = 0;
@@ -105,7 +129,8 @@ export async function PATCH(
 
         await HeshabModel.findByIdAndUpdate(heshab._id, {
           deposit: newDeposit,
-          totalExpense: newTotalExpense,
+          perExtra, // Update perExtra automatically
+          totalExpense: newTotalExpense, // Update totalExpense automatically
           currentBalance,
           due,
         });
@@ -116,7 +141,7 @@ export async function PATCH(
 
     return NextResponse.json({
       success: true,
-      message: "Expense approved: deducted from deposit (total expense is manual)",
+      message: "Expense approved: totalExpense automatically calculated as perExtra + approved expenses",
       data: { id: expense._id.toString() },
     });
   } catch (error: any) {

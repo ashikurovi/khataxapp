@@ -329,118 +329,166 @@ export class PDFGenerator {
   static generateBazarList(bazarList: BazarListWithUser[]): jsPDF {
     const doc = new jsPDF();
     
-    // Modern color scheme
-    const primaryColor: [number, number, number] = [59, 130, 246]; // Blue
-    const secondaryColor: [number, number, number] = [139, 92, 246]; // Purple
-    const successColor: [number, number, number] = [34, 197, 94]; // Green
-    const warningColor: [number, number, number] = [251, 191, 36]; // Yellow
+    // Professional color scheme
+    const primaryColor: [number, number, number] = [30, 58, 138]; // Deep Blue
+    const accentColor: [number, number, number] = [59, 130, 246]; // Blue
     const grayColor: [number, number, number] = [107, 114, 128]; // Gray
-    const lightGray: [number, number, number] = [243, 244, 246]; // Light gray
+    const lightGray: [number, number, number] = [249, 250, 251]; // Light gray
+    const borderColor: [number, number, number] = [229, 231, 235]; // Border gray
 
-    // Modern Header
-    doc.setFillColor(...secondaryColor);
-    doc.rect(0, 0, 210, 40, "F");
+    // Professional Header with gradient effect
+    doc.setFillColor(...primaryColor);
+    doc.rect(0, 0, 210, 50, "F");
     
+    // White text on colored background
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
+    doc.setFontSize(26);
     doc.setFont("helvetica", "bold");
-    doc.text("BAZAR SCHEDULE", 105, 25, { align: "center" });
+    doc.text("BAZAR SCHEDULE", 105, 28, { align: "center" });
     
-    doc.setFontSize(10);
+    doc.setFontSize(11);
     doc.setFont("helvetica", "normal");
-    doc.text(`Total Bazar Assignments: ${bazarList.length}`, 105, 35, { align: "center" });
+    doc.text(`KhataX Mess Management System`, 105, 38, { align: "center" });
+    
+    doc.setFontSize(9);
+    doc.text(`Generated on ${format(new Date(), "dd MMM yyyy, hh:mm a")}`, 105, 45, { align: "center" });
 
     doc.setTextColor(0, 0, 0);
 
-    // Bazar List Table with Modern Styling
+    // Group bazar by date (since 2 people per date)
+    const bazarByDate = new Map<string, BazarListWithUser[]>();
+    bazarList.forEach((b) => {
+      const dateKey = format(new Date(b.date), "yyyy-MM-dd");
+      if (!bazarByDate.has(dateKey)) {
+        bazarByDate.set(dateKey, []);
+      }
+      bazarByDate.get(dateKey)!.push(b);
+    });
+
+    // Professional Bazar List Table (without status)
     autoTable(doc, {
-      startY: 50,
+      startY: 60,
       head: [[
-        "Bazar #",
-        "Date",
-        "Assigned Member",
-        "Status"
+        { content: "Date", styles: { fontStyle: "bold", halign: "center" } },
+        { content: "Bazar #", styles: { fontStyle: "bold", halign: "center" } },
+        { content: "Assigned Members", styles: { fontStyle: "bold", halign: "center" } }
       ]],
-      body: bazarList.map((b) => {
-        const statusColor = b.status === "Completed" ? successColor : b.status === "Pending" ? warningColor : grayColor;
-        return [
-          { content: `#${b.bazarNo}`, styles: { fontStyle: "bold" } },
-          format(new Date(b.date), "dd MMM yyyy"),
-          b.assignedToUser.name,
-          { 
-            content: b.status, 
-            styles: { 
-              fillColor: statusColor,
-              textColor: [255, 255, 255],
-              fontStyle: "bold",
-              halign: "center"
-            } 
-          },
-        ];
-      }),
+      body: Array.from(bazarByDate.entries())
+        .sort(([dateA], [dateB]) => new Date(dateA).getTime() - new Date(dateB).getTime())
+        .map(([dateKey, bazars]) => {
+          const date = new Date(dateKey);
+          const bazarNumbers = bazars.map(b => `#${b.bazarNo}`).join(", ");
+          const memberNames = bazars.map(b => b.assignedToUser.name).join(", ");
+          
+          return [
+            { 
+              content: format(date, "dd MMM yyyy"), 
+              styles: { fontStyle: "bold", fontSize: 11 } 
+            },
+            { 
+              content: bazarNumbers, 
+              styles: { halign: "center", fontSize: 10 } 
+            },
+            { 
+              content: memberNames, 
+              styles: { fontSize: 10 } 
+            },
+          ];
+        }),
       theme: "striped",
       styles: {
         fontSize: 10,
-        cellPadding: 8,
-        lineColor: [229, 231, 235],
+        cellPadding: 10,
+        lineColor: borderColor,
+        lineWidth: 0.5,
       },
       headStyles: {
-        fillColor: secondaryColor,
+        fillColor: primaryColor,
         textColor: [255, 255, 255],
         fontStyle: "bold",
+        fontSize: 11,
+        textColor: [255, 255, 255],
       },
       alternateRowStyles: {
         fillColor: lightGray,
       },
       columnStyles: {
-        0: { cellWidth: 30, halign: "center" },
-        1: { cellWidth: 50 },
-        2: { cellWidth: 80 },
-        3: { cellWidth: 50, halign: "center" },
+        0: { cellWidth: 60, halign: "left" },
+        1: { cellWidth: 50, halign: "center" },
+        2: { cellWidth: 100, halign: "left" },
       },
     });
 
-    // Summary Statistics
-    const completedCount = bazarList.filter(b => b.status === "Completed").length;
-    const pendingCount = bazarList.filter(b => b.status === "Pending").length;
-    
+    // Professional Summary Section
     if (bazarList.length > 0) {
+      const uniqueDates = new Set(bazarList.map(b => format(new Date(b.date), "yyyy-MM-dd"))).size;
+      const uniqueMembers = new Set(bazarList.map(b => b.assignedToUser.name)).size;
+      
       autoTable(doc, {
-        startY: (doc as any).lastAutoTable.finalY + 15,
+        startY: (doc as any).lastAutoTable.finalY + 20,
         head: [[
-          { content: "SUMMARY", colSpan: 2, styles: { fillColor: secondaryColor, textColor: [255, 255, 255], fontStyle: "bold", halign: "center" } }
+          { content: "SCHEDULE SUMMARY", colSpan: 2, styles: { fillColor: primaryColor, textColor: [255, 255, 255], fontStyle: "bold", halign: "center", fontSize: 11 } }
         ]],
         body: [
-          ["Total Bazar Assignments", bazarList.length.toString()],
-          ["Completed", completedCount.toString()],
-          ["Pending", pendingCount.toString()],
+          [
+            { content: "Total Bazar Dates", styles: { fontStyle: "bold" } },
+            { content: uniqueDates.toString(), styles: { halign: "center", fontStyle: "bold" } }
+          ],
+          [
+            { content: "Total Assignments", styles: { fontStyle: "bold" } },
+            { content: bazarList.length.toString(), styles: { halign: "center", fontStyle: "bold" } }
+          ],
+          [
+            { content: "Assigned Members", styles: { fontStyle: "bold" } },
+            { content: uniqueMembers.toString(), styles: { halign: "center", fontStyle: "bold" } }
+          ],
         ],
         theme: "plain",
         styles: {
           fontSize: 10,
-          cellPadding: 6,
+          cellPadding: 8,
+          lineColor: borderColor,
         },
         columnStyles: {
-          0: { cellWidth: 140, fontStyle: "bold" },
-          1: { cellWidth: 50, halign: "center" },
+          0: { cellWidth: 120, fontStyle: "bold" },
+          1: { cellWidth: 70, halign: "center" },
         },
       });
     }
 
-    // Footer
+    // Professional Footer
     const pageCount = doc.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
       const pageHeight = doc.internal.pageSize.height;
       
-      doc.setDrawColor(...grayColor);
+      // Footer line
+      doc.setDrawColor(...borderColor);
       doc.setLineWidth(0.5);
-      doc.line(20, pageHeight - 20, 190, pageHeight - 20);
+      doc.line(20, pageHeight - 25, 190, pageHeight - 25);
       
+      // Footer text
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...grayColor);
-      doc.text("© KhataX Mess Management System", 105, pageHeight - 10, { align: "center" });
+      doc.text(
+        `Generated on ${format(new Date(), "dd MMM yyyy, hh:mm a")}`,
+        105,
+        pageHeight - 15,
+        { align: "center" }
+      );
+      
+      // Page number
+      doc.text(
+        `Page ${i} of ${pageCount}`,
+        105,
+        pageHeight - 10,
+        { align: "center" }
+      );
+      
+      // Footer branding
+      doc.setFontSize(8);
+      doc.text("© KhataX Mess Management System", 105, pageHeight - 5, { align: "center" });
     }
 
     return doc;

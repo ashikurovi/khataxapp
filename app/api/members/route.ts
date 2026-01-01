@@ -3,6 +3,7 @@ import { MemberWithUser, UserRole } from "@/types";
 import connectDB from "@/lib/db";
 import UserModel from "@/app/api/models/User";
 import MemberModel from "@/app/api/models/Member";
+import { recalculatePerExtraForAllHeshab } from "@/lib/per-extra-calculator";
 
 export async function GET(request: NextRequest) {
   try {
@@ -76,6 +77,14 @@ export async function POST(request: NextRequest) {
       border: 0,
       managerReceivable: 0,
     });
+
+    // Recalculate perExtra for all heshab records since member count changed
+    try {
+      await recalculatePerExtraForAllHeshab();
+    } catch (recalcError: any) {
+      console.error("Error recalculating perExtra after member creation:", recalcError);
+      // Don't fail the request if recalculation fails
+    }
 
     return NextResponse.json({
       success: true,
