@@ -407,7 +407,6 @@ export class PDFGenerator {
         textColor: [255, 255, 255],
         fontStyle: "bold",
         fontSize: 11,
-        textColor: [255, 255, 255],
       },
       alternateRowStyles: {
         fillColor: lightGray,
