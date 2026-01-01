@@ -205,13 +205,13 @@ export async function DELETE(request: NextRequest) {
     const memberCount = await MemberModel.countDocuments();
     const perExtra = memberCount > 0 ? totalExtra / memberCount : 0;
 
-    // Add back the extra amount to deposits (reverse the deduction)
+    // Update all members: only update perExtra, keep deposit unchanged (do NOT add back to deposit)
     const members = await MemberModel.find().lean();
     const memberUpdatePromises = members.map(async (member: any) => {
-      // Add back the daily extra amount to deposit
-      const newTotalDeposit = member.totalDeposit + extraAmount;
+      // Keep deposit unchanged, only update perExtra
+      const newTotalDeposit = member.totalDeposit; // Keep existing deposit
       const newTotalExpense = member.totalExpense; // Keep existing totalExpense (manual)
-      const newBalanceDue = newTotalDeposit - newTotalExpense;
+      const newBalanceDue = newTotalDeposit - (perExtra + newTotalExpense);
       
       // Calculate border and managerReceivable based on balance
       let border = 0;
@@ -224,24 +224,20 @@ export async function DELETE(request: NextRequest) {
       }
 
       await MemberModel.findByIdAndUpdate(member._id, {
-        totalDeposit: newTotalDeposit,
+        totalDeposit: newTotalDeposit, // Keep unchanged
         totalExpense: newTotalExpense,
         balanceDue: newBalanceDue,
         border,
         managerReceivable,
-        perExtra,
+        perExtra, // Update perExtra only
       });
     });
 
-    // Update ALL heshab records (not just this month): add back to deposit and update perExtra automatically
+    // Update ALL heshab records: only update perExtra, keep deposit unchanged (do NOT add back to deposit)
     const allHeshabRecords = await HeshabModel.find().lean();
     const heshabUpdatePromises = allHeshabRecords.map(async (heshab: any) => {
-      // Only add back deposit if this heshab record is for the same month as the deleted extra
-      const heshabDate = new Date(heshab.year, heshab.month - 1, 1);
-      const deletedDate = new Date(year, month - 1, 1);
-      const isSameMonth = heshabDate.getTime() === deletedDate.getTime();
-      
-      const newDeposit = isSameMonth ? heshab.deposit + extraAmount : heshab.deposit;
+      // Keep deposit unchanged, only update perExtra
+      const newDeposit = heshab.deposit; // Keep existing deposit
       const newTotalExpense = heshab.totalExpense; // Keep existing totalExpense (manual)
       
       // Update perExtra automatically (calculated from all daily extras)
@@ -262,7 +258,7 @@ export async function DELETE(request: NextRequest) {
       }
       
       await HeshabModel.findByIdAndUpdate(heshab._id, {
-        deposit: newDeposit,
+        deposit: newDeposit, // Keep unchanged
         perExtra: updatedPerExtra, // Automatically calculated and updated
         totalExpense: newTotalExpense,
         currentBalance,
