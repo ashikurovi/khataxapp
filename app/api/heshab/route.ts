@@ -154,36 +154,23 @@ export async function POST(request: NextRequest) {
       year: data.year,
     }).lean();
 
-    let finalDeposit = data.deposit;
     const newDepositAmount = data.deposit; // Amount being added
     let paidToReceivable = 0; // Track how much was paid to manager receivable
 
+    // Always sum new deposit with previous deposit if existing heshab exists
+    let finalDeposit = newDepositAmount;
     if (existingHeshab) {
-      // Use existing heshab's stored values
-      const existingDue = existingHeshab.due || 0;
-      const existingBorder = existingHeshab.currentBalance > 0 ? existingHeshab.currentBalance : 0;
-
-      // Step 1: If there's manager receivable (due), deduct it from new deposit first
-      // Example: Manager Receivable = 500, Deposit = 400 → Cut 400, Manager Receivable = 100, Deposit = 0 (no change to existing deposit)
-      // Example: Manager Receivable = 100, Deposit = 200 → Cut 100, Manager Receivable = 0, Deposit = 100 (add 100 to existing deposit)
-      let remainingDeposit = newDepositAmount;
+      // Always add the new deposit to the existing deposit (sum previous deposits)
+      finalDeposit = existingHeshab.deposit + newDepositAmount;
       
-      if (existingDue > 0) {
-        if (remainingDeposit >= existingDue) {
-          // New deposit covers the due completely
-          paidToReceivable = existingDue;
-          remainingDeposit = remainingDeposit - existingDue;
-        } else {
-          // New deposit is less than due, just reduce the due (don't add to deposit)
-          paidToReceivable = remainingDeposit;
-          remainingDeposit = 0; // No deposit added, all went to pay receivable
-        }
+      // If there's manager receivable (due), it will be recalculated from the new balance
+      // The deposit is always added, and receivables are calculated separately from the new total
+      const existingDue = existingHeshab.due || 0;
+      if (existingDue > 0 && newDepositAmount > 0) {
+        // Track how much of the new deposit would go towards paying receivable
+        // But still add the full deposit amount
+        paidToReceivable = Math.min(newDepositAmount, existingDue);
       }
-
-      // Step 2: Add remaining deposit to existing deposit
-      // The existing deposit already contains all previous deposits, so we just add the new remaining amount
-      // Note: Border is the positive balance and should NOT be added to deposit - it's calculated separately
-      finalDeposit = existingHeshab.deposit + remainingDeposit;
     }
 
     // Calculate balance: deposit - (perExtra + totalExpense)
@@ -246,31 +233,8 @@ export async function POST(request: NextRequest) {
       let description = data.description;
       if (!description) {
         if (existingHeshab) {
-          const existingDue = existingHeshab.due || 0;
-          const existingBorder = existingHeshab.currentBalance > 0 ? existingHeshab.currentBalance : 0;
-          
-          let parts: string[] = [];
-          
-          // Check if deposit was used to pay manager receivable
-          if (existingDue > 0 && newDepositAmount > 0) {
-            const paidToReceivable = Math.min(newDepositAmount, existingDue);
-            if (paidToReceivable === newDepositAmount) {
-              // All deposit went to pay receivable
-              parts.push(`Payment towards manager receivable (TK ${paidToReceivable.toFixed(2)})`);
-            } else {
-              // Part of deposit went to pay receivable
-              parts.push(`Deposit (TK ${paidToReceivable.toFixed(2)} paid to receivable, TK ${(newDepositAmount - paidToReceivable).toFixed(2)} added)`);
-            }
-          } else {
-            parts.push(`Deposit`);
-          }
-          
-          // Check if border was added to deposit
-          if (existingBorder > 0) {
-            parts.push(`Border amount (TK ${existingBorder.toFixed(2)}) added to deposit`);
-          }
-          
-          description = `${parts.join(", ")} - ${data.month}/${data.year}`;
+          // Deposit is always added to previous deposit
+          description = `Deposit (TK ${newDepositAmount.toFixed(2)}) added to previous deposit (TK ${existingHeshab.deposit.toFixed(2)}) - ${data.month}/${data.year}`;
         } else {
           description = `Deposit for ${data.month}/${data.year}`;
         }
