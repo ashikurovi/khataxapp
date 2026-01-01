@@ -82,30 +82,11 @@ export async function POST(request: NextRequest) {
       addedBy,
     });
 
-    // Update perExtra in all heshab records for the same month
-    const date = new Date(data.date);
-    const month = date.getMonth() + 1;
-    const year = date.getFullYear();
-
-    // Get all daily extras for this month
-    const monthExtras = await DailyExtraModel.find({
-      date: {
-        $gte: new Date(year, month - 1, 1),
-        $lt: new Date(year, month, 1),
-      },
-    }).lean();
-
-    const totalExtra = monthExtras.reduce((sum, extra) => sum + extra.amount, 0);
-    
-    // Get all members
-    const members = await MemberModel.find().lean();
-    const memberCount = members.length;
-    const perExtra = memberCount > 0 ? totalExtra / memberCount : 0;
-
     // Use full daily extra amount (not divided per member)
     const extraAmount = data.amount;
 
     // Update all members: subtract full amount from totalDeposit only (totalExpense is manual)
+    const members = await MemberModel.find().lean();
     const memberUpdatePromises = members.map(async (member: any) => {
       // Subtract full daily extra amount from deposit only, keep totalExpense unchanged (manual)
       const newTotalDeposit = Math.max(0, member.totalDeposit - extraAmount);
@@ -131,15 +112,19 @@ export async function POST(request: NextRequest) {
       });
     });
 
-    // Update all heshab records for this month: subtract from deposit only (totalExpense is manual)
+    // Update all heshab records: subtract from deposit only (perExtra is manual, not auto-calculated)
+    const date = new Date(data.date);
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
     const heshabRecords = await HeshabModel.find({ month, year }).lean();
     const heshabUpdatePromises = heshabRecords.map(async (heshab: any) => {
-      // Subtract full daily extra amount from deposit only, keep totalExpense unchanged (manual)
+      // Subtract full daily extra amount from deposit only, keep perExtra and totalExpense unchanged (manual)
       const newDeposit = Math.max(0, heshab.deposit - extraAmount);
+      const existingPerExtra = heshab.perExtra; // Keep existing perExtra (manual, not auto-calculated)
       const newTotalExpense = heshab.totalExpense; // Keep existing totalExpense (manual)
       
       // Recalculate balance: (deposit + perExtra) - totalExpense
-      const calculatedBalance = newDeposit + perExtra - newTotalExpense;
+      const calculatedBalance = newDeposit + existingPerExtra - newTotalExpense;
       
       // Calculate border and managerReceivable
       let border = 0;
@@ -154,7 +139,7 @@ export async function POST(request: NextRequest) {
       
       await HeshabModel.findByIdAndUpdate(heshab._id, {
         deposit: newDeposit,
-        perExtra,
+        // perExtra is not updated - it remains manual
         totalExpense: newTotalExpense,
         currentBalance,
         due,

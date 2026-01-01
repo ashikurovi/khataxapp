@@ -67,19 +67,8 @@ export async function POST(request: NextRequest) {
     await connectDB();
     const data = await request.json();
 
-    // Calculate perExtra from daily extras for the month
-    const dailyExtras = await DailyExtraModel.find({
-      date: {
-        $gte: new Date(data.year, data.month - 1, 1),
-        $lt: new Date(data.year, data.month, 1),
-      },
-    }).lean();
-
-    const totalExtra = dailyExtras.reduce((sum, extra) => sum + extra.amount, 0);
-    
-    // Get all members count
-    const memberCount = await MemberModel.countDocuments();
-    const perExtra = memberCount > 0 ? totalExtra / memberCount : 0;
+    // perExtra is manual - use provided value or default to 0
+    const perExtra = data.perExtra !== undefined ? data.perExtra : 0;
 
     // Get existing heshab record if it exists
     const existingHeshab = await HeshabModel.findOne({
@@ -397,22 +386,11 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Use provided values or calculate/keep existing values
+    // Use provided values or keep existing values
     const updatedDeposit = deposit !== undefined ? deposit : existingHeshab.deposit;
     
-    // Calculate perExtra from daily extras if not provided
-    let updatedPerExtra = perExtra;
-    if (updatedPerExtra === undefined) {
-      const dailyExtras = await DailyExtraModel.find({
-        date: {
-          $gte: new Date(existingHeshab.year, existingHeshab.month - 1, 1),
-          $lt: new Date(existingHeshab.year, existingHeshab.month, 1),
-        },
-      }).lean();
-      const totalExtra = dailyExtras.reduce((sum, extra) => sum + extra.amount, 0);
-      const memberCount = await MemberModel.countDocuments();
-      updatedPerExtra = memberCount > 0 ? totalExtra / memberCount : existingHeshab.perExtra;
-    }
+    // perExtra is manual - use provided value or keep existing
+    const updatedPerExtra = perExtra !== undefined ? perExtra : existingHeshab.perExtra;
 
     const updatedTotalExpense = totalExpense !== undefined ? totalExpense : existingHeshab.totalExpense;
 

@@ -23,6 +23,7 @@ const heshabSchema = z.object({
   deposit: z.number().min(0),
   month: z.number().min(1).max(12),
   year: z.number().min(2020),
+  perExtra: z.number().min(0).optional(),
   totalExpense: z.number().min(0),
   border: z.number().min(0).optional(),
   managerReceivable: z.number().min(0).optional(),
@@ -137,6 +138,7 @@ export default function HeshabPage() {
       month: new Date().getMonth() + 1,
       year: new Date().getFullYear(),
       deposit: 0,
+      perExtra: 0,
       totalExpense: 0,
       border: 0,
       managerReceivable: 0,
@@ -341,6 +343,23 @@ export default function HeshabPage() {
                 </p>
                 {errors.deposit && (
                   <p className="text-sm text-destructive">{errors.deposit.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="perExtra">Per Extra</Label>
+                <Input
+                  id="perExtra"
+                  type="number"
+                  step="0.01"
+                  placeholder="Per extra amount"
+                  {...register("perExtra", { valueAsNumber: true })}
+                />
+                <p className="text-xs text-gray-500">
+                  Per extra amount (manual entry)
+                </p>
+                {errors.perExtra && (
+                  <p className="text-sm text-destructive">{errors.perExtra.message}</p>
                 )}
               </div>
 
