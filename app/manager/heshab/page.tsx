@@ -16,6 +16,7 @@ import { z } from "zod";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 
 const heshabSchema = z.object({
   userId: z.string().min(1, "Member is required"),
@@ -128,6 +129,8 @@ export default function HeshabPage() {
     handleSubmit,
     formState: { errors },
     reset,
+    setValue,
+    watch,
   } = useForm<HeshabForm>({
     resolver: zodResolver(heshabSchema),
     defaultValues: {
@@ -139,6 +142,8 @@ export default function HeshabPage() {
       managerReceivable: 0,
     },
   });
+
+  const selectedUserId = watch("userId");
 
   const onSubmit = (data: HeshabForm) => {
     createHeshab(data);
@@ -274,18 +279,19 @@ export default function HeshabPage() {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 sm:space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="userId">Member</Label>
-                <select
-                  id="userId"
-                  {...register("userId")}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <option value="">Select a member</option>
-                  {members?.map((member) => (
-                    <option key={member.id} value={member.userId}>
-                      {member.user.name}
-                    </option>
-                  ))}
-                </select>
+                <Combobox
+                  options={
+                    members?.map((member) => ({
+                      value: member.userId,
+                      label: member.user.name,
+                    })) || []
+                  }
+                  value={selectedUserId || ""}
+                  onValueChange={(value) => setValue("userId", value)}
+                  placeholder="Select a member"
+                  searchPlaceholder="Search members..."
+                  emptyMessage="No member found."
+                />
                 {errors.userId && (
                   <p className="text-sm text-destructive">{errors.userId.message}</p>
                 )}
