@@ -128,31 +128,24 @@ export async function POST(request: NextRequest) {
     const memberCount = await MemberModel.countDocuments();
     const perExtra = memberCount > 0 ? totalExtra / memberCount : 0;
 
-    // Use manual totalExpense if provided, otherwise calculate from approved expenses
-    let totalExpense = data.totalExpense;
-    if (totalExpense === undefined || totalExpense === null) {
-      const approvedExpenses = await DailyExpenseModel.find({
-        approved: true,
-        date: {
-          $gte: new Date(data.year, data.month - 1, 1),
-          $lt: new Date(data.year, data.month, 1),
-        },
-      }).lean();
-      
-      const totalApprovedExpenseAmount = approvedExpenses.reduce(
-        (sum, exp: any) => sum + exp.totalTK + exp.extra,
-        0
-      );
-      // totalExpense = sum of approved expenses only (perExtra is separate)
-      totalExpense = totalApprovedExpenseAmount;
-    }
-
     // Get existing heshab record if it exists
     const existingHeshab = await HeshabModel.findOne({
       userId: data.userId,
       month: data.month,
       year: data.year,
     }).lean();
+
+    // Use manual totalExpense if provided, otherwise keep existing or default to 0 (fully manual input)
+    let totalExpense = data.totalExpense;
+    if (totalExpense === undefined || totalExpense === null) {
+      if (existingHeshab) {
+        // Keep existing totalExpense value
+        totalExpense = existingHeshab.totalExpense || 0;
+      } else {
+        // Default to 0 for new records (fully manual input required)
+        totalExpense = 0;
+      }
+    }
 
     const newDepositAmount = data.deposit; // Amount being added
     let paidToReceivable = 0; // Track how much was paid to manager receivable
@@ -401,24 +394,11 @@ export async function PATCH(request: NextRequest) {
     const memberCount = await MemberModel.countDocuments();
     const updatedPerExtra = memberCount > 0 ? totalExtra / memberCount : 0;
 
-    // Use manual totalExpense if provided, otherwise keep existing or calculate from approved expenses
+    // Use manual totalExpense if provided, otherwise keep existing value (fully manual input)
     let updatedTotalExpense = totalExpense;
     if (updatedTotalExpense === undefined || updatedTotalExpense === null) {
-      // If not provided, use existing value or calculate from approved expenses
-      const approvedExpenses = await DailyExpenseModel.find({
-        approved: true,
-        date: {
-          $gte: new Date(existingHeshab.year, existingHeshab.month - 1, 1),
-          $lt: new Date(existingHeshab.year, existingHeshab.month, 1),
-        },
-      }).lean();
-      
-      const totalApprovedExpenseAmount = approvedExpenses.reduce(
-        (sum, exp: any) => sum + exp.totalTK + exp.extra,
-        0
-      );
-      // Use calculated value or keep existing
-      updatedTotalExpense = totalApprovedExpenseAmount > 0 ? totalApprovedExpenseAmount : existingHeshab.totalExpense;
+      // If not provided, keep existing value (fully manual input required)
+      updatedTotalExpense = existingHeshab.totalExpense || 0;
     }
 
     // Calculate balance: deposit - (perExtra + totalExpense)
