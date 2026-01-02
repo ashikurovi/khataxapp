@@ -332,7 +332,7 @@ export async function POST(request: NextRequest) {
       member.border = border;
       member.managerReceivable = due;
       member.totalDeposit = finalDeposit;
-      member.totalExpense = totalExpense; // Update with calculated totalExpense
+      member.totalExpense = totalExpense; // Update with manual totalExpense (fully manual input)
       member.perExtra = perExtra;
       // Recalculate balanceDue: deposit - (perExtra + totalExpense)
       member.balanceDue = currentBalance;

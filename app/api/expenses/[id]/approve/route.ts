@@ -47,35 +47,15 @@ export async function PATCH(
     const memberCount = await MemberModel.countDocuments();
     const perExtra = memberCount > 0 ? totalExtra / memberCount : 0;
 
-    // Get all approved expenses for this month (including the one just approved)
-    const approvedExpenses = await DailyExpenseModel.find({
-      approved: true,
-      date: {
-        $gte: new Date(expenseYear, expenseMonth - 1, 1),
-        $lt: new Date(expenseYear, expenseMonth, 1),
-      },
-    }).lean();
-
-    // Calculate total expense: sum of all approved expenses (NOT including perExtra)
-    const totalApprovedExpenseAmount = approvedExpenses.reduce(
-      (sum, exp: any) => sum + exp.totalTK + exp.extra,
-      0
-    );
-    const totalExpense = totalApprovedExpenseAmount; // Only approved expenses, perExtra is separate
-
-    // Calculate expense amount for deposit deduction (totalTK + extra)
-    const expenseAmount = expense.totalTK + expense.extra;
-
     // Get all members
     const members = await MemberModel.find().lean();
     
     if (members.length > 0) {
-      // Update all members: subtract from deposit and add to totalExpense
+      // Update all members: only update perExtra, keep deposit and totalExpense unchanged (fully manual)
       const memberUpdatePromises = members.map(async (member: any) => {
-        // Subtract expense amount from deposit
-        const newTotalDeposit = Math.max(0, member.totalDeposit - expenseAmount);
-        // Add expense amount to totalExpense (manual totalExpense + new expense)
-        const newTotalExpense = member.totalExpense + expenseAmount;
+        // Keep deposit and totalExpense unchanged (fully manual input)
+        const newTotalDeposit = member.totalDeposit; // Keep existing deposit
+        const newTotalExpense = member.totalExpense; // Keep existing totalExpense (manual)
         // Calculate balance: deposit - (perExtra + totalExpense)
         const newBalanceDue = newTotalDeposit - (perExtra + newTotalExpense);
         
@@ -90,12 +70,12 @@ export async function PATCH(
         }
 
         await MemberModel.findByIdAndUpdate(member._id, {
-          totalDeposit: newTotalDeposit,
-          totalExpense: newTotalExpense,
+          totalDeposit: newTotalDeposit, // Keep unchanged
+          totalExpense: newTotalExpense, // Keep unchanged (fully manual)
           balanceDue: newBalanceDue,
           border,
           managerReceivable,
-          perExtra,
+          perExtra, // Update perExtra automatically
         });
       });
 
@@ -108,10 +88,9 @@ export async function PATCH(
       }).lean();
 
       const heshabUpdatePromises = heshabRecords.map(async (heshab: any) => {
-        // Subtract expense amount from deposit
-        const newDeposit = Math.max(0, heshab.deposit - expenseAmount);
-        // Add expense amount to totalExpense (manual totalExpense + new expense)
-        const newTotalExpense = heshab.totalExpense + expenseAmount;
+        // Keep deposit and totalExpense unchanged (fully manual input)
+        const newDeposit = heshab.deposit; // Keep existing deposit
+        const newTotalExpense = heshab.totalExpense; // Keep existing totalExpense (manual)
         
         // Recalculate balance: deposit - (perExtra + totalExpense)
         const calculatedBalance = newDeposit - (perExtra + newTotalExpense);
@@ -128,9 +107,9 @@ export async function PATCH(
         }
 
         await HeshabModel.findByIdAndUpdate(heshab._id, {
-          deposit: newDeposit,
+          deposit: newDeposit, // Keep unchanged
           perExtra, // Update perExtra automatically
-          totalExpense: newTotalExpense, // Update totalExpense automatically
+          totalExpense: newTotalExpense, // Keep unchanged (fully manual)
           currentBalance,
           due,
         });
@@ -141,7 +120,7 @@ export async function PATCH(
 
     return NextResponse.json({
       success: true,
-      message: "Expense approved: totalExpense automatically calculated as perExtra + approved expenses",
+      message: "Expense approved successfully (totalExpense is manual input only)",
       data: { id: expense._id.toString() },
     });
   } catch (error: any) {
