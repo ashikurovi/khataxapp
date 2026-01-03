@@ -7,11 +7,11 @@ import { recalculatePerExtraForAllHeshab } from "@/lib/per-extra-calculator";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
-    const memberId = params.id;
+    const { id: memberId } = await params;
     const data = await request.json();
 
     // Find the member
@@ -88,11 +88,11 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
-    const memberId = params.id;
+    const { id: memberId } = await params;
 
     // Find the member
     const member = await MemberModel.findById(memberId);
