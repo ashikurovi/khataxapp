@@ -32,6 +32,7 @@ type MemberForm = z.infer<typeof memberSchema>;
 
 export default function MembersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState<MemberWithUser | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showCheckboxes, setShowCheckboxes] = useState(false);
   const queryClient = useQueryClient();
@@ -50,7 +51,45 @@ export default function MembersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["members"] });
+      queryClient.invalidateQueries({ queryKey: ["manager-stats"] });
       setDialogOpen(false);
+      reset();
+      setEditingMember(null);
+      toast.success("Member created successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(`Error: ${error.message}`);
+    },
+  });
+
+  const { mutate: updateMember, isPending: isUpdating } = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: MemberForm }) => {
+      return apiClient.patch(`/members/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["members"] });
+      queryClient.invalidateQueries({ queryKey: ["manager-stats"] });
+      setDialogOpen(false);
+      reset();
+      setEditingMember(null);
+      toast.success("Member updated successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(`Error: ${error.message}`);
+    },
+  });
+
+  const { mutate: deleteMember, isPending: isDeletingSingle } = useMutation({
+    mutationFn: async (id: string) => {
+      return apiClient.delete(`/members/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["members"] });
+      queryClient.invalidateQueries({ queryKey: ["manager-stats"] });
+      toast.success("Member deleted successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(`Error: ${error.message}`);
     },
   });
 
@@ -66,10 +105,10 @@ export default function MembersPage() {
       queryClient.invalidateQueries({ queryKey: ["manager-stats"] });
       setSelectedIds([]);
       setShowCheckboxes(false);
-      alert("Selected members deleted successfully");
+      toast.success("Selected members deleted successfully");
     },
     onError: (error: Error) => {
-      alert(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`);
     },
   });
 
@@ -159,9 +198,39 @@ export default function MembersPage() {
     }
   };
 
+  const handleEdit = (member: MemberWithUser) => {
+    setEditingMember(member);
+    setValue("name", member.user.name);
+    setValue("dept", member.user.dept);
+    setValue("institute", member.user.institute);
+    setValue("phone", member.user.phone);
+    setValue("email", member.user.email);
+    setValue("role", member.user.role);
+    setDialogOpen(true);
+  };
+
+  const handleDelete = (memberId: string) => {
+    const member = members?.find((m) => m.id === memberId);
+    const memberName = member?.user.name || "this member";
+    if (confirm(`Are you sure you want to delete ${memberName}? This will also delete their associated user account. This action cannot be undone.`)) {
+      deleteMember(memberId);
+    }
+  };
+
   const onSubmit = (data: MemberForm) => {
-    createMember(data);
-    reset();
+    if (editingMember) {
+      updateMember({ id: editingMember.id, data });
+    } else {
+      createMember(data);
+    }
+  };
+
+  const handleDialogClose = (open: boolean) => {
+    setDialogOpen(open);
+    if (!open) {
+      reset();
+      setEditingMember(null);
+    }
   };
 
   return (
@@ -202,7 +271,14 @@ export default function MembersPage() {
             >
               {showCheckboxes ? "Cancel Selection" : "Select Items"}
             </Button>
-            <Button onClick={() => setDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg w-full sm:w-auto text-sm sm:text-base">
+            <Button 
+              onClick={() => {
+                setEditingMember(null);
+                reset();
+                setDialogOpen(true);
+              }} 
+              className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg w-full sm:w-auto text-sm sm:text-base"
+            >
               <Plus className="mr-2 h-4 w-4" />
               Add Member
             </Button>
@@ -224,16 +300,21 @@ export default function MembersPage() {
                 selectedIds={selectedIds}
                 onSelect={handleSelect}
                 onSelectAll={handleSelectAll}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                showActions={true}
               />
             )}
           </CardContent>
         </Card>
 
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
           <DialogContent className="w-[90vw] sm:w-[500px] max-h-[90vh] overflow-y-auto bg-white">
-            <DialogClose onClose={() => setDialogOpen(false)} />
+            <DialogClose onClose={() => handleDialogClose(false)} />
             <DialogHeader>
-              <DialogTitle className="text-lg sm:text-xl">Add New Member</DialogTitle>
+              <DialogTitle className="text-lg sm:text-xl">
+                {editingMember ? "Edit Member" : "Add New Member"}
+              </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 sm:space-y-4">
               <div className="space-y-2">
@@ -313,13 +394,15 @@ export default function MembersPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setDialogOpen(false)}
+                  onClick={() => handleDialogClose(false)}
                   className="w-full sm:w-auto"
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isPending} className="w-full sm:w-auto">
-                  {isPending ? "Adding..." : "Add Member"}
+                <Button type="submit" disabled={isPending || isUpdating} className="w-full sm:w-auto">
+                  {isPending || isUpdating 
+                    ? (editingMember ? "Updating..." : "Adding...") 
+                    : (editingMember ? "Update Member" : "Add Member")}
                 </Button>
               </div>
             </form>

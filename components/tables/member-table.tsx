@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/table";
 import { MemberWithUser } from "@/types";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Edit, Trash2 } from "lucide-react";
 
 interface MemberTableProps {
   members: MemberWithUser[];
@@ -17,6 +19,9 @@ interface MemberTableProps {
   onSelect?: (id: string, checked: boolean) => void;
   onSelectAll?: (checked: boolean) => void;
   showCheckboxes?: boolean;
+  onEdit?: (member: MemberWithUser) => void;
+  onDelete?: (memberId: string) => void;
+  showActions?: boolean;
 }
 
 export function MemberTable({
@@ -25,6 +30,9 @@ export function MemberTable({
   onSelect,
   onSelectAll,
   showCheckboxes = false,
+  onEdit,
+  onDelete,
+  showActions = false,
 }: MemberTableProps) {
   const allSelected = members.length > 0 && members.every(m => selectedIds.includes(m.id));
   const someSelected = members.some(m => selectedIds.includes(m.id));
@@ -53,12 +61,13 @@ export function MemberTable({
             <TableHead>Phone</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Role</TableHead>
+            {showActions && <TableHead>Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {members.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={showCheckboxes ? 7 : 6} className="text-center">
+              <TableCell colSpan={showCheckboxes ? (showActions ? 8 : 7) : (showActions ? 7 : 6)} className="text-center">
                 No members found
               </TableCell>
             </TableRow>
@@ -83,6 +92,32 @@ export function MemberTable({
                 <TableCell>
                   <Badge variant="outline">{member.user.role}</Badge>
                 </TableCell>
+                {showActions && (
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onEdit?.(member)}
+                        className="h-8 w-8"
+                        title="Edit member"
+                        disabled={!onEdit}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onDelete?.(member.id)}
+                        className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        title="Delete member"
+                        disabled={!onDelete}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                )}
               </TableRow>
             ))
           )}
