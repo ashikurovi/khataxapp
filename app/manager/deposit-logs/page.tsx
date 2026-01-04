@@ -9,20 +9,21 @@ import { DepositLogWithUser } from "@/types";
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Search, Calendar } from "lucide-react";
 
 export default function DepositLogsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const today = new Date();
-  const todayMonth = today.getMonth() + 1;
-  const todayYear = today.getFullYear();
+  const [startDate, setStartDate] = useState(format(today, "yyyy-MM-dd"));
+  const [endDate, setEndDate] = useState(format(today, "yyyy-MM-dd"));
 
-  const { data: allDepositLogs, isLoading } = useQuery({
-    queryKey: ["deposit-logs", todayMonth, todayYear],
+  const { data: depositLogs, isLoading } = useQuery({
+    queryKey: ["deposit-logs", startDate, endDate],
     queryFn: async () => {
       const params = new URLSearchParams();
-      params.append("month", todayMonth.toString());
-      params.append("year", todayYear.toString());
+      if (startDate) params.append("startDate", startDate);
+      if (endDate) params.append("endDate", endDate);
       
       const response = await apiClient.get<DepositLogWithUser[]>(
         `/heshab/deposit-logs?${params.toString()}`
@@ -31,24 +32,18 @@ export default function DepositLogsPage() {
     },
   });
 
-  // Filter to show only today's logs and apply search
-  const depositLogs = useMemo(() => {
-    if (!allDepositLogs) return [];
-    const todayStr = format(today, "yyyy-MM-dd");
-    let filtered = allDepositLogs.filter((log) => {
-      const logDateStr = format(new Date(log.date), "yyyy-MM-dd");
-      return logDateStr === todayStr;
-    });
+  // Apply search filter
+  const filteredDepositLogs = useMemo(() => {
+    if (!depositLogs) return [];
     
-    // Apply search filter if search term exists
     if (searchTerm.trim()) {
-      filtered = filtered.filter((log) =>
+      return depositLogs.filter((log) =>
         log.user.name.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
     
-    return filtered;
-  }, [allDepositLogs, today, searchTerm]);
+    return depositLogs;
+  }, [depositLogs, searchTerm]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden">
@@ -68,22 +63,57 @@ export default function DepositLogsPage() {
 
         <Card className="bg-white/80 backdrop-blur-lg border-white/20 shadow-lg">
           <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex flex-col gap-4">
               <div>
-                <CardTitle className="text-gray-900">Today's Deposit Logs</CardTitle>
+                <CardTitle className="text-gray-900">Deposit Logs</CardTitle>
                 <CardDescription className="text-gray-600">
-                  Deposit records for {format(today, "dd MMMM yyyy")}
+                  View deposit records by date range
                 </CardDescription>
               </div>
-              <div className="relative w-full sm:w-auto sm:min-w-[250px]">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  type="text"
-                  placeholder="Search by member name..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-white/80 backdrop-blur-md border-white/30"
-                />
+              
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex flex-col sm:flex-row gap-4 flex-1">
+                  <div className="flex-1">
+                    <Label htmlFor="startDate" className="text-sm text-gray-700 mb-2 block">
+                      <Calendar className="inline h-4 w-4 mr-1" />
+                      Start Date
+                    </Label>
+                    <Input
+                      id="startDate"
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="bg-white/80 backdrop-blur-md border-white/30"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <Label htmlFor="endDate" className="text-sm text-gray-700 mb-2 block">
+                      <Calendar className="inline h-4 w-4 mr-1" />
+                      End Date
+                    </Label>
+                    <Input
+                      id="endDate"
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="bg-white/80 backdrop-blur-md border-white/30"
+                    />
+                  </div>
+                </div>
+                <div className="relative w-full sm:w-auto sm:min-w-[250px]">
+                  <Label htmlFor="search" className="text-sm text-gray-700 mb-2 block">
+                    <Search className="inline h-4 w-4 mr-1" />
+                    Search
+                  </Label>
+                  <Input
+                    id="search"
+                    type="text"
+                    placeholder="Search by member name..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="bg-white/80 backdrop-blur-md border-white/30"
+                  />
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -91,7 +121,7 @@ export default function DepositLogsPage() {
             {isLoading ? (
               <p className="text-gray-600">Loading...</p>
             ) : (
-              <DepositLogTable depositLogs={depositLogs || []} />
+              <DepositLogTable depositLogs={filteredDepositLogs || []} />
             )}
           </CardContent>
         </Card>

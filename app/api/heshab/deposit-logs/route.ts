@@ -11,12 +11,29 @@ export async function GET(request: NextRequest) {
     const month = searchParams.get("month");
     const year = searchParams.get("year");
     const heshabId = searchParams.get("heshabId");
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
 
     const query: any = {};
     if (userId) query.userId = userId;
     if (month) query.month = parseInt(month);
     if (year) query.year = parseInt(year);
     if (heshabId) query.heshabId = heshabId;
+    
+    // Date range filtering
+    if (startDate || endDate) {
+      query.date = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        query.date.$gte = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        query.date.$lte = end;
+      }
+    }
 
     const depositLogs = await DepositLogModel.find(query)
       .populate("userId")
