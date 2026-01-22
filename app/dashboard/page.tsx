@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Navbar } from "@/components/layout/navbar";
 import { apiClient } from "@/lib/api-client";
-import { MemberWithUser, DepositLogWithUser } from "@/types";
+import { MemberWithUser, DepositLogWithUser, UserRole } from "@/types";
 import { Download, Wallet, History, Clock, Receipt, Plus, Upload, X } from "lucide-react";
 import { PDFGenerator } from "@/lib/pdf-generator";
 import { DepositLogTable } from "@/components/tables/deposit-log-table";
@@ -59,7 +59,7 @@ export default function DashboardPage() {
       params.append("userId", memberData.userId);
       params.append("month", currentMonth.toString());
       params.append("year", currentYear.toString());
-      
+
       const response = await apiClient.get<DepositLogWithUser[]>(
         `/heshab/deposit-logs?${params.toString()}`
       );
@@ -130,7 +130,7 @@ export default function DashboardPage() {
     }
 
     setPhotoFile(file);
-    
+
     // Create preview
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -202,6 +202,26 @@ export default function DashboardPage() {
     );
   }
 
+  if (memberData.user.role !== UserRole.SUPER_ADMIN) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8">
+          <Card className="bg-white/80 backdrop-blur-lg border-white/20 shadow-lg border-red-200">
+            <CardContent className="pt-6 text-center">
+              <div className="h-16 w-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">🚫</span>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Access Denied</h2>
+              <p className="text-gray-600">You do not have permission to view this dashboard.</p>
+              <p className="text-sm text-gray-400 mt-2">Only Super Admins can access this area.</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden">
       {/* Animated background blobs */}
@@ -221,17 +241,17 @@ export default function DashboardPage() {
             <p className="text-sm sm:text-base text-gray-600">Your financial overview and account details</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <Button 
-              onClick={handleDownloadInvoice} 
-              variant="outline" 
+            <Button
+              onClick={handleDownloadInvoice}
+              variant="outline"
               className="bg-white/80 backdrop-blur-md border-white/30 hover:bg-white shadow-lg w-full sm:w-auto text-sm sm:text-base"
             >
               <Download className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Download Invoice</span>
               <span className="sm:hidden">Invoice</span>
             </Button>
-            <Button 
-              onClick={() => setExpenseDialogOpen(true)} 
+            <Button
+              onClick={() => setExpenseDialogOpen(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg w-full sm:w-auto text-sm sm:text-base"
             >
               <Plus className="mr-2 h-4 w-4" />
@@ -281,7 +301,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-    
+
         </div>
 
         <div className="mt-6 grid gap-6 md:grid-cols-2">

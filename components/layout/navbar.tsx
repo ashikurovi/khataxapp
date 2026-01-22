@@ -40,7 +40,7 @@ export function Navbar({ userRole: propUserRole, userName: propUserName, showLog
 
       if (token || userDataStr) {
         setIsLoggedIn(true);
-        
+
         if (userDataStr) {
           try {
             const userData: UserData = JSON.parse(userDataStr);
@@ -67,7 +67,7 @@ export function Navbar({ userRole: propUserRole, userName: propUserName, showLog
 
     // Listen for storage changes (e.g., when user logs in/out in another tab)
     window.addEventListener("storage", checkAuth);
-    
+
     // Also check periodically in case of same-tab changes (e.g., after login)
     const interval = setInterval(checkAuth, 500);
 
@@ -113,7 +113,7 @@ export function Navbar({ userRole: propUserRole, userName: propUserName, showLog
           <div className="hidden md:flex items-center space-x-4">
             {showAuthButtons ? (
               <>
-                {displayRole === "Member" && (
+                {displayRole === "SuperAdmin" && (
                   <Link href="/dashboard">
                     <Button variant="ghost">Dashboard</Button>
                   </Link>
@@ -151,8 +151,8 @@ export function Navbar({ userRole: propUserRole, userName: propUserName, showLog
             ) : (
               <>
                 {showLoginButton && (
-                  <GoogleLoginButton 
-                    text="Login as Member" 
+                  <GoogleLoginButton
+                    text="Login as Member"
                     className=""
                     variant="default"
                   />
@@ -181,7 +181,7 @@ export function Navbar({ userRole: propUserRole, userName: propUserName, showLog
           <div className="md:hidden py-4 space-y-2">
             {showAuthButtons ? (
               <>
-                {displayRole === "Member" && (
+                {displayRole === "SuperAdmin" && (
                   <Link href="/dashboard" className="block">
                     <Button variant="ghost" className="w-full justify-start">
                       Dashboard
@@ -230,7 +230,7 @@ export function Navbar({ userRole: propUserRole, userName: propUserName, showLog
               <>
                 {showLoginButton && (
                   <div className="w-full">
-                    <GoogleLoginButton 
+                    <GoogleLoginButton
                       text="Login as Member"
                       className="w-full"
                     />

@@ -3,6 +3,7 @@ export enum UserRole {
   MEMBER = "Member",
   MANAGER = "Manager",
   ADMIN = "Admin",
+  SUPER_ADMIN = "SuperAdmin",
 }
 
 // Bazar Status
