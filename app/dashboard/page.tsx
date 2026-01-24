@@ -202,7 +202,11 @@ export default function DashboardPage() {
     );
   }
 
-  if (memberData.user.role !== UserRole.SUPER_ADMIN) {
+  if (
+    memberData.user.role !== UserRole.SUPER_ADMIN &&
+    memberData.user.role !== UserRole.MANAGER &&
+    memberData.user.role !== UserRole.ADMIN
+  ) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
         <Navbar />
@@ -214,7 +218,7 @@ export default function DashboardPage() {
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Access Denied</h2>
               <p className="text-gray-600">You do not have permission to view this dashboard.</p>
-              <p className="text-sm text-gray-400 mt-2">Only Super Admins can access this area.</p>
+              <p className="text-sm text-gray-400 mt-2">Only authorized personnel can access this area.</p>
             </CardContent>
           </Card>
         </div>
